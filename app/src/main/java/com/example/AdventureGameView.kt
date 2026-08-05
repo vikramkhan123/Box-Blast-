@@ -21,7 +21,7 @@ class AdventureGameView @JvmOverloads constructor(
     
     // Level System
     private var currentLevel = prefs.getInt("AdventureLevel", 1)
-    private var targetGems = 10 + (currentLevel * 2) // Level badhne pe target badhega
+    private var targetGems = 10 + (currentLevel * 2) 
     private var gemsCollected = 0
     private var isGameOver = false
     private var isLevelComplete = false
@@ -46,6 +46,15 @@ class AdventureGameView @JvmOverloads constructor(
     private val levelTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFD700.toInt(); textSize = 45f; typeface = Typeface.DEFAULT_BOLD }
     private val overlayTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF38EF7D.toInt(); textSize = 90f; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER; setShadowLayer(15f, 0f, 10f, Color.BLACK) }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2CD04E.toInt(); style = Paint.Style.FILL }
+    
+    // ERROR FIXED HERE: Button text paint defined properly at class level
+    private val btnTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
+        color = Color.WHITE
+        textSize = 50f
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(10f, 0f, 0f, Color.BLACK)
+    }
 
     private var cellSize = 0f
     private var boardSize = 0f
@@ -92,9 +101,8 @@ class AdventureGameView @JvmOverloads constructor(
 
         for (r in 0 until 8) { for (c in 0 until 8) grid[r][c] = 0 }
         
-        // Spawn Diamonds initially
         var spawned = 0
-        val initialGems = minOf(targetGems, 12) // Board pe starting me max 12 gems
+        val initialGems = minOf(targetGems, 12) 
         while(spawned < initialGems) {
             val r = Random.nextInt(8)
             val c = Random.nextInt(8)
@@ -124,7 +132,6 @@ class AdventureGameView @JvmOverloads constructor(
             } 
         }
         
-        // Agar diamonds aur chahiye to nayi shape me diamond dhanste hain (35% chance)
         if (gemsCollected < targetGems && Random.nextFloat() < 0.35f) {
             val validCoords = mutableListOf<Pair<Int, Int>>()
             for (r in copy.indices) {
@@ -134,7 +141,7 @@ class AdventureGameView @JvmOverloads constructor(
             }
             if (validCoords.isNotEmpty()) {
                 val (gr, gc) = validCoords.random()
-                copy[gr][gc] = 10 // Diamond ID
+                copy[gr][gc] = 10 
             }
         }
         return Shape(copy)
@@ -177,20 +184,17 @@ class AdventureGameView @JvmOverloads constructor(
         bgPaint.color = 0xFF2A3A6A.toInt()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        // UI Headers
         canvas.drawText("LEVEL $currentLevel", 40f, 80f, levelTextPaint)
         drawStarGem(canvas, targetUiX - 60f, targetUiY - 40f, 50f)
         val targetText = "$gemsCollected / $targetGems"
         canvas.drawText(targetText, targetUiX + 10f, targetUiY + 10f, targetTextPaint)
 
-        // Board
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         canvas.drawRoundRect(rect, 16f, 16f, boardPaint)
         canvas.drawRoundRect(rect, 16f, 16f, boardBorderPaint)
 
         val emptyPaint = Paint().apply { color = 0x1AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 3f }
 
-        // Draw Placed Blocks
         for (r in 0 until 8) {
             for (c in 0 until 8) {
                 val cx = boardX + c * cellSize
@@ -202,26 +206,22 @@ class AdventureGameView @JvmOverloads constructor(
             }
         }
 
-        // Clean Shadow Preview (Accurate Magnet Snap Indicator)
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 drawShape(canvas, shape, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize, alpha = 90)
             }
         }
 
-        // Draw Tray Shapes
         for (i in 0 until 3) {
             if (i == draggingShapeIndex) continue
             val shape = trayShapes[i]
             if (shape != null && !shape.placed) drawShape(canvas, shape, shape.cx, shape.cy, trayCellSize, alpha = 255)
         }
 
-        // Draw Dragging Shape smoothly following finger
         draggingShape?.let { shape ->
             drawShape(canvas, shape, shape.cx, shape.cy, cellSize, alpha = 255)
         }
 
-        // Render Blast Particles Animation
         if (blasts.isNotEmpty()) {
             val iterator = blasts.iterator()
             val blastPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -239,27 +239,24 @@ class AdventureGameView @JvmOverloads constructor(
             if (animatingBlasts) invalidate()
         }
 
-        // Render Flying Gem Animations
         if (flyingGems.isNotEmpty()) {
             val iterator = flyingGems.iterator()
             var animatingGems = false
             while (iterator.hasNext()) {
                 val gem = iterator.next()
-                gem.progress += 0.05f // Speed
+                gem.progress += 0.05f 
                 if (gem.progress >= 1f) {
                     gemsCollected++
                     if (gemsCollected >= targetGems && !isLevelComplete) {
                         isLevelComplete = true
-                        soundManager.playClear() // Level up sound
+                        soundManager.playClear() 
                     }
                     soundManager.playPick() 
                     iterator.remove()
                 } else {
                     animatingGems = true
-                    // Smooth Arc/Lerp
                     val currentX = gem.startX + (targetUiX - 60f - gem.startX) * gem.progress
                     val currentY = gem.startY + (targetUiY - 40f - gem.startY) * gem.progress
-                    // Scale down as it flies
                     val flySize = cellSize * 0.7f * (1f - (gem.progress * 0.3f))
                     drawStarGem(canvas, currentX, currentY, flySize)
                 }
@@ -267,14 +264,12 @@ class AdventureGameView @JvmOverloads constructor(
             if (animatingGems) invalidate() 
         }
 
-        // Overlays & Buttons
         if (isLevelComplete && flyingGems.isEmpty()) {
             canvas.drawColor(0xDD000000.toInt())
             canvas.drawText("WELL DONE!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
             
-            // Next Level Button
             canvas.drawRoundRect(nextLevelBtnRect, 30f, 30f, btnPaint)
-            val btnTextPaint = Paint(textPaint).apply { textSize = 50f; textAlign = Paint.Align.CENTER }
+            // Error line replaced with btnTextPaint
             canvas.drawText("NEXT LEVEL", nextLevelBtnRect.centerX(), nextLevelBtnRect.centerY() + 15f, btnTextPaint)
             
         } else if (isGameOver) {
@@ -282,12 +277,11 @@ class AdventureGameView @JvmOverloads constructor(
             canvas.drawColor(0xDD000000.toInt())
             canvas.drawText("NO MOVES!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
             
-            // Restart Button
             btnPaint.color = 0xFFFF5E62.toInt()
             canvas.drawRoundRect(nextLevelBtnRect, 30f, 30f, btnPaint)
-            val btnTextPaint = Paint(textPaint).apply { textSize = 50f; textAlign = Paint.Align.CENTER }
+            // Error line replaced with btnTextPaint
             canvas.drawText("RESTART", nextLevelBtnRect.centerX(), nextLevelBtnRect.centerY() + 15f, btnTextPaint)
-            btnPaint.color = 0xFF2CD04E.toInt() // reset paint color
+            btnPaint.color = 0xFF2CD04E.toInt() 
         }
     }
 
@@ -310,17 +304,13 @@ class AdventureGameView @JvmOverloads constructor(
         blockDarkEdgePaint.alpha = if (alpha < 255) 0 else 85
 
         if (colorId == 10) {
-            // EMBEDDED (Dhanse Hue) GEM LOGIC
-            // 1. Draw Outer Socket (Darker base)
             blockBasePaint.color = 0xFF141E3A.toInt() 
             canvas.drawRoundRect(rect, 12f, 12f, blockBasePaint)
             
-            // 2. Draw Socket Shadow/Bevel (Inner depth)
             val innerRect = RectF(rect.left + 5f, rect.top + 5f, rect.right - 5f, rect.bottom - 5f)
             blockBasePaint.color = 0xFF0D152B.toInt()
             canvas.drawRoundRect(innerRect, 8f, 8f, blockBasePaint)
 
-            // 3. Draw Gem smaller inside the socket
             val gemSize = size * 0.65f
             val gX = x + (size - gemSize)/2f
             val gY = y + (size - gemSize)/2f
@@ -328,7 +318,6 @@ class AdventureGameView @JvmOverloads constructor(
             return
         }
 
-        // Normal 3D Block
         blockBasePaint.color = getBaseColor(colorId)
         canvas.drawRoundRect(rect, 12f, 12f, blockBasePaint)
 
@@ -388,7 +377,6 @@ class AdventureGameView @JvmOverloads constructor(
         val tx = event.x
         val ty = event.y
 
-        // Button Clicks handling (Next Level / Restart)
         if (event.action == MotionEvent.ACTION_DOWN) {
             if ((isLevelComplete || isGameOver) && nextLevelBtnRect.contains(tx, ty)) {
                 if (isLevelComplete) {
@@ -413,7 +401,6 @@ class AdventureGameView @JvmOverloads constructor(
                             soundManager.playPick()
                             draggingShapeIndex = i
                             draggingShape = shape
-                            // Ungli ke theek upar center aayega shape ka
                             shape.cx = tx - (shape.cols * cellSize) / 2f
                             shape.cy = ty - (shape.rows * cellSize) - 180f
                             dragTouchOffsetX = tx - shape.cx
@@ -429,7 +416,6 @@ class AdventureGameView @JvmOverloads constructor(
                     shape.cx = tx - dragTouchOffsetX
                     shape.cy = ty - dragTouchOffsetY
                     
-                    // ACCURATE MAGNET: Calculate center of the shape relative to the grid
                     val centerCol = (shape.cx + (shape.cols * cellSize)/2f - boardX) / cellSize
                     val centerRow = (shape.cy + (shape.rows * cellSize)/2f - boardY) / cellSize
                     
@@ -500,7 +486,6 @@ class AdventureGameView @JvmOverloads constructor(
                     val bX = boardX + c * cellSize + cellSize/2f
                     val bY = boardY + r * cellSize + cellSize/2f
                     
-                    // Add Blast Particle
                     blasts.add(BlastParticle(bX, bY, cellSize/2f, 255, getBaseColor(colorId)))
                     
                     if (colorId == 10) flyingGems.add(FlyingGem(bX - cellSize/2f, bY - cellSize/2f))
@@ -510,7 +495,7 @@ class AdventureGameView @JvmOverloads constructor(
             for (c in colsToClear) {
                 for (r in 0 until 8) {
                     val colorId = grid[r][c]
-                    if (colorId != 0) { // check if not already cleared by row blast
+                    if (colorId != 0) { 
                         val bX = boardX + c * cellSize + cellSize/2f
                         val bY = boardY + r * cellSize + cellSize/2f
                         blasts.add(BlastParticle(bX, bY, cellSize/2f, 255, getBaseColor(colorId)))
@@ -520,7 +505,7 @@ class AdventureGameView @JvmOverloads constructor(
                 }
             }
             
-            invalidate() // Start animation loop
+            invalidate() 
         }
     }
 
