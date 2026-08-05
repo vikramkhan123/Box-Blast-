@@ -287,22 +287,29 @@ class TetrisGameView @JvmOverloads constructor(
         }
     }
 
+    // Yahan While Loop se fix kiya gaya hai
     private fun checkLines() {
         var linesCleared = 0
-        for (r in ROWS - 1 downTo 0) {
+        var r = ROWS - 1
+        
+        while (r >= 0) {
             var isFull = true
             for (c in 0 until COLS) {
                 if (grid[r][c] == 0) { isFull = false; break }
             }
+            
             if (isFull) {
                 linesCleared++
                 for (shiftR in r downTo 1) {
                     for (c in 0 until COLS) { grid[shiftR][c] = grid[shiftR - 1][c] }
                 }
                 for (c in 0 until COLS) grid[0][c] = 0
-                r++
+                // r-- nahi kiya taaki upar se jo line aayi hai wo bhi wapas check ho jaye
+            } else {
+                r--
             }
         }
+        
         if (linesCleared > 0) {
             soundManager.playClear()
             score += (linesCleared * 100) * linesCleared
