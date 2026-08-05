@@ -32,7 +32,7 @@ class GameView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
     private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x88FFFFFF.toInt() // White glow highlight
+        color = 0x88FFFFFF.toInt()
         style = Paint.Style.FILL
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -46,7 +46,6 @@ class GameView @JvmOverloads constructor(
     }
     private val restartBtnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-    // Dimensions
     private var cellSize = 0f
     private var boardSize = 0f
     private var boardX = 0f
@@ -84,13 +83,11 @@ class GameView @JvmOverloads constructor(
 
     private val trayShapes = arrayOfNulls<Shape>(3)
 
-    // Drag & Magnet State
     private var draggingShapeIndex = -1
     private var draggingShape: Shape? = null
     private var dragTouchOffsetX = 0f
     private var dragTouchOffsetY = 0f
     
-    // Magnet Snap & Highlight Target
     private var hoverRow = -1
     private var hoverCol = -1
     private var canFitHover = false
@@ -153,12 +150,10 @@ class GameView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // 1. Draw Background
         bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(),
             0xFF162456.toInt(), 0xFF0A0D24.toInt(), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        // 2. Header UI
         val scoreText = "Score: $score"
         val scoreWidth = textPaint.measureText(scoreText)
         val scoreRect = RectF(60f, 80f, 60f + scoreWidth + 60f, 160f)
@@ -171,7 +166,6 @@ class GameView @JvmOverloads constructor(
         canvas.drawRoundRect(settingsRect, 40f, 40f, boardBorderPaint)
         canvas.drawCircle(settingsRect.centerX(), settingsRect.centerY(), 15f, boardBorderPaint)
 
-        // 3. Draw Game Board
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         canvas.drawRoundRect(rect, 30f, 30f, boardPaint)
         canvas.drawRoundRect(rect, 30f, 30f, boardBorderPaint)
@@ -182,7 +176,6 @@ class GameView @JvmOverloads constructor(
             strokeWidth = 3f
         }
 
-        // 4. Draw Board Cells & Magnet Glow Highlight
         for (r in 0 until 8) {
             for (c in 0 until 8) {
                 val cx = boardX + c * cellSize
@@ -198,7 +191,6 @@ class GameView @JvmOverloads constructor(
             }
         }
 
-        // Draw Magnet Fit Glowing Highlight under finger
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 for (r in 0 until shape.rows) {
@@ -210,7 +202,6 @@ class GameView @JvmOverloads constructor(
                                 val hx = boardX + targetC * cellSize
                                 val hy = boardY + targetR * cellSize
                                 val hRect = RectF(hx + 4, hy + 4, hx + cellSize - 4, hy + cellSize - 4)
-                                // Glow Box
                                 canvas.drawRoundRect(hRect, 12f, 12f, highlightPaint)
                             }
                         }
@@ -219,7 +210,6 @@ class GameView @JvmOverloads constructor(
             }
         }
 
-        // 5. Draw Tray Shapes
         for (i in 0 until 3) {
             if (i == draggingShapeIndex) continue
             val shape = trayShapes[i]
@@ -228,7 +218,6 @@ class GameView @JvmOverloads constructor(
             }
         }
 
-        // 6. Action Bar
         val restartW = 300f
         restartRect.set((width - restartW)/2f, height - 200f, (width + restartW)/2f, height - 100f)
         val shadow = RectF(restartRect).apply { offset(0f, 10f) }
@@ -238,16 +227,13 @@ class GameView @JvmOverloads constructor(
         val tw = textPaint.measureText(rText)
         canvas.drawText(rText, restartRect.centerX() - tw/2f, restartRect.centerY() + 15f, textPaint)
 
-        // 7. Draw Dragging Shape (With Finger Offset + Magnet Position Snap)
         draggingShape?.let { shape ->
             var renderX = shape.cx
             var renderY = shape.cy
 
-            // Magnet Snapping Effect
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 val snapX = boardX + hoverCol * cellSize
                 val snapY = boardY + hoverRow * cellSize
-                // Smooth Magnet Pull Blend (80% Snap to Target)
                 renderX = renderX * 0.2f + snapX * 0.8f
                 renderY = renderY * 0.2f + snapY * 0.8f
             }
@@ -312,7 +298,6 @@ class GameView @JvmOverloads constructor(
                             val newW = shape.cols * cellSize
                             val newH = shape.rows * cellSize
 
-                            // Position shape above finger for better visibility
                             shape.cx = tx - newW / 2f
                             shape.cy = ty - newH - 80f
 
@@ -330,7 +315,6 @@ class GameView @JvmOverloads constructor(
                     shape.cx = tx - dragTouchOffsetX
                     shape.cy = ty - dragTouchOffsetY
 
-                    // Check Grid Magnet Hover Position
                     hoverCol = ((shape.cx + cellSize / 2 - boardX) / cellSize).roundToInt()
                     hoverRow = ((shape.cy + cellSize / 2 - boardY) / cellSize).roundToInt()
 
@@ -346,12 +330,10 @@ class GameView @JvmOverloads constructor(
                         placeShape(shape, hoverRow, hoverCol)
                         shape.placed = true
 
-                        // Immediately auto-refill tray when all 3 placed
                         if (trayShapes.all { it == null || it.placed }) {
                             fillTray()
                         }
                     } else {
-                        // Return shape smoothly to tray
                         updateTrayPositions()
                     }
 
