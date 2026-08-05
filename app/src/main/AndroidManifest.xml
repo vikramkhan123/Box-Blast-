@@ -11,6 +11,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
+        
+        <!-- Main Menu Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -18,10 +20,15 @@
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <!-- Nayi Classic Game Activity -->
+        <activity
+            android:name=".ClassicGameActivity"
+            android:theme="@style/Theme.MyApplication"
+            android:screenOrientation="portrait" />
+
+    </application>
 </manifest>
