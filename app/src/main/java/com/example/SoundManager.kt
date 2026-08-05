@@ -1,52 +1,44 @@
 package com.example
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.SoundPool
+import android.media.AudioManager
+import android.media.ToneGenerator
 
 class SoundManager(context: Context) {
-    private var soundPool: SoundPool
     
-    var pickSoundId = 0
-    var dropSoundId = 0
-    var clearSoundId = 0
-    var gameOverSoundId = 0
+    private var toneGen: ToneGenerator? = null
 
     init {
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_GAME)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        soundPool = SoundPool.Builder()
-            .setMaxStreams(5) 
-            .setAudioAttributes(audioAttributes)
-            .build()
-
-        // TODO: Jab aap res/raw/ folder me sounds daal dein, tab in 4 lines ke aage se '//' hata dein
-        // pickSoundId = soundPool.load(context, R.raw.pick_sound, 1)
-        // dropSoundId = soundPool.load(context, R.raw.drop_sound, 1)
-        // clearSoundId = soundPool.load(context, R.raw.clear_sound, 1)
-        // gameOverSoundId = soundPool.load(context, R.raw.game_over, 1)
+        try {
+            // 100 means max volume
+            toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun playPick() {
-        if (pickSoundId != 0) soundPool.play(pickSoundId, 1f, 1f, 1, 0, 1f)
+        // Ek choti aur sharp 'Tick/Beep' sound
+        toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 50)
     }
 
     fun playDrop() {
-        if (dropSoundId != 0) soundPool.play(dropSoundId, 1f, 1f, 1, 0, 1f)
+        // Halki si 'Boop' sound jab block fit ho
+        toneGen?.startTone(ToneGenerator.TONE_DTMF_8, 50)
     }
 
     fun playClear() {
-        if (clearSoundId != 0) soundPool.play(clearSoundId, 1f, 1f, 1, 0, 1f)
+        // Success ki double-beep sound jab line clear ho
+        toneGen?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 200)
     }
 
     fun playGameOver() {
-        if (gameOverSoundId != 0) soundPool.play(gameOverSoundId, 1f, 1f, 1, 0, 1f)
+        // Game Over ke liye ek long error buzzer
+        toneGen?.startTone(ToneGenerator.TONE_SUP_ERROR, 600)
     }
 
     fun release() {
-        soundPool.release()
+        toneGen?.release()
+        toneGen = null
     }
 }
