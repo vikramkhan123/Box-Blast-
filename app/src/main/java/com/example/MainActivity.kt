@@ -46,24 +46,24 @@ fun MainMenuScreen() {
     val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 1. Premium Background Image (Jisme Logo pehle se hai)
+        // Premium Background Image
         Image(
-            painter = painterResource(id = R.drawable.bg_main), // Make sure image is named bg_main.jpg in drawable folder
+            painter = painterResource(id = R.drawable.bg_main), 
             contentDescription = "Background",
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Buttons positioned at the bottom, just like the reference image
+        // Buttons positioned at the bottom
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 60.dp), // Thodi neeche se jagah chhodne ke liye
+                .padding(bottom = 60.dp), 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Bottom
         ) {
             
-            // TETRIS Mode (Big Golden Button - Like "PLAY")
+            // TETRIS Mode Button
             PremiumButton(
                 title = "TETRIS FALL",
                 icon = "🧩",
@@ -71,12 +71,13 @@ fun MainMenuScreen() {
                 bottomColor = Color(0xFFE67300),
                 borderColor = Color(0xFFFFFF88)
             ) {
-                // TODO: Tetris Activity
+                // TETRIS MODE LINKED HERE
+                context.startActivity(Intent(context, TetrisGameActivity::class.java))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ADVENTURE Mode (Medium Blue Button)
+            // ADVENTURE Mode Button
             PremiumButton(
                 title = "ADVENTURE",
                 icon = "🗺️",
@@ -89,7 +90,7 @@ fun MainMenuScreen() {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // CLASSIC Mode (Medium Purple Button)
+            // CLASSIC Mode Button
             PremiumButton(
                 title = "CLASSIC",
                 icon = "👑",
@@ -103,7 +104,6 @@ fun MainMenuScreen() {
     }
 }
 
-// Bilkul Reference Image jaisa 3D Glossy Button
 @Composable
 fun PremiumButton(
     title: String,
@@ -116,15 +116,14 @@ fun PremiumButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
-    // Smooth 3D Bounce Animation
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "bounce")
 
     Box(
         modifier = Modifier
-            .fillMaxWidth(0.75f) // Width reference image ke hisab se perfect hai
-            .height(72.dp) // Thoda mota/chunky feel dene ke liye
+            .fillMaxWidth(0.75f) 
+            .height(72.dp) 
             .scale(scale)
-            .shadow(16.dp, RoundedCornerShape(36.dp), spotColor = bottomColor) // Glow type shadow
+            .shadow(16.dp, RoundedCornerShape(36.dp), spotColor = bottomColor) 
             .clip(RoundedCornerShape(36.dp))
             .background(Brush.verticalGradient(listOf(topColor, bottomColor)))
             .border(3.dp, borderColor, RoundedCornerShape(36.dp))
@@ -135,7 +134,6 @@ fun PremiumButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Inner Glossy Highlight (3D Bevel simulation)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -148,7 +146,6 @@ fun PremiumButton(
                 )
         )
 
-        // Text & Icon Row
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
