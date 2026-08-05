@@ -35,5 +35,10 @@
             android:name=".AdventureGameActivity"
             android:theme="@style/Theme.MyApplication"
             android:screenOrientation="portrait" />
+                <!-- Tetris Game Activity -->
+        <activity
+            android:name=".TetrisGameActivity"
+            android:theme="@style/Theme.MyApplication"
+            android:screenOrientation="portrait" />
     </application>
 </manifest>
