@@ -1,15 +1,16 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.example"
-    compileSdk = 36  // Yahan 35 se 36 kiya hai
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example"
         minSdk = 24
-        targetSdk = 36 // Yahan bhi 35 se 36 kiya hai
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -29,8 +30,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.material3)
 }
