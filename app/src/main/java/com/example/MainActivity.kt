@@ -69,6 +69,7 @@ fun MainMenuScreen() {
             modifier = Modifier.padding(bottom = 60.dp)
         )
 
+        // Classic Mode
         GameModeButton(
             title = "CLASSIC MODE",
             subtitle = "Score High & Relax",
@@ -80,24 +81,26 @@ fun MainMenuScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Adventure Mode
         GameModeButton(
             title = "ADVENTURE",
             subtitle = "Collect Gems & Candies",
             topColor = Color(0xFFB92B27),
             bottomColor = Color(0xFF6C1613)
         ) {
-            // TODO: Adventure Activity
+            context.startActivity(Intent(context, AdventureGameActivity::class.java))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Tetris Mode (Agle step me active karenge)
         GameModeButton(
             title = "TETRIS FALL",
             subtitle = "Rotate & Drop",
             topColor = Color(0xFF00C6FF),
             bottomColor = Color(0xFF0072FF)
         ) {
-            // TODO: Tetris Activity
+            // TODO: Start Tetris Activity
         }
     }
 }
@@ -112,6 +115,7 @@ fun GameModeButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "bounce")
 
     Box(
