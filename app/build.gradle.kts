@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace = "com.example"
-    compileSdk = 35
+    compileSdk = 36  // Yahan 35 se 36 kiya hai
 
     defaultConfig {
         applicationId = "com.example"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36 // Yahan bhi 35 se 36 kiya hai
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
