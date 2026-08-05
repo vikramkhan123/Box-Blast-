@@ -42,7 +42,6 @@ class MainActivity : ComponentActivity() {
 fun MainMenuScreen() {
     val context = LocalContext.current
     
-    // Premium Dark Blue Gradient Background
     val bgBrush = Brush.verticalGradient(
         colors = listOf(Color(0xFF162456), Color(0xFF0A0D24))
     )
@@ -55,13 +54,12 @@ fun MainMenuScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 3D Title "BOX BLAST"
         Text(
             text = "BOX BLAST",
             style = TextStyle(
                 fontSize = 54.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFFFFdf38), // Golden Yellow
+                color = Color(0xFFFFdf38),
                 shadow = Shadow(
                     color = Color(0x99000000),
                     blurRadius = 15f
@@ -71,44 +69,39 @@ fun MainMenuScreen() {
             modifier = Modifier.padding(bottom = 60.dp)
         )
 
-        // Classic Mode Button (Green)
         GameModeButton(
             title = "CLASSIC MODE",
             subtitle = "Score High & Relax",
             topColor = Color(0xFF2CD04E),
             bottomColor = Color(0xFF199131)
         ) {
-            // TODO: Start Classic Activity
-            // context.startActivity(Intent(context, ClassicGameActivity::class.java))
+            context.startActivity(Intent(context, ClassicGameActivity::class.java))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Adventure / Gems Mode Button (Purple/Pink)
         GameModeButton(
             title = "ADVENTURE",
             subtitle = "Collect Gems & Candies",
             topColor = Color(0xFFB92B27),
             bottomColor = Color(0xFF6C1613)
         ) {
-            // TODO: Start Adventure Activity
+            // TODO: Adventure Activity
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Tetris Mode Button (Blue)
         GameModeButton(
             title = "TETRIS FALL",
             subtitle = "Rotate & Drop",
             topColor = Color(0xFF00C6FF),
             bottomColor = Color(0xFF0072FF)
         ) {
-            // TODO: Start Tetris Activity
+            // TODO: Tetris Activity
         }
     }
 }
 
-// Custom 3D Bouncy Button Component
 @Composable
 fun GameModeButton(
     title: String,
@@ -119,8 +112,6 @@ fun GameModeButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    
-    // Scale animation for smooth bouncy press
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "bounce")
 
     Box(
