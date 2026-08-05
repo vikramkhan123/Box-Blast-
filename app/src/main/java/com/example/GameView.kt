@@ -14,8 +14,9 @@ class GameView @JvmOverloads constructor(
 
     private val grid = Array(8) { IntArray(8) { 0 } }
     private var score = 0
+    private var isGameOver = false
 
-    // Paints
+    // Paints Setup
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF1D3273.toInt()
@@ -31,10 +32,28 @@ class GameView @JvmOverloads constructor(
         color = 0x66000000
         style = Paint.Style.FILL
     }
-    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x88FFFFFF.toInt()
+    
+    // Naya Premium Glow Paint (Golden/Neon style)
+    private val glowStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFAD02C.toInt() 
+        style = Paint.Style.STROKE
+        strokeWidth = 10f
+        setShadowLayer(15f, 0f, 0f, 0xFFFAD02C.toInt())
+    }
+    private val glowFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x66FAD02C // Transparent yellow fill
         style = Paint.Style.FILL
     }
+    
+    // Game Over Text Paint
+    private val gameOverTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFF5E62.toInt() // Reddish Text
+        textSize = 100f
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(15f, 0f, 10f, Color.BLACK)
+    }
+
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 50f
@@ -108,6 +127,7 @@ class GameView @JvmOverloads constructor(
         if (width > 0 && height > 0) {
             updateTrayPositions()
         }
+        checkGameOver() // Shapes fill hone ke baad game over check
     }
 
     private fun randomShape(): Shape {
@@ -150,10 +170,12 @@ class GameView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
+        // Background
         bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(),
             0xFF162456.toInt(), 0xFF0A0D24.toInt(), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
+        // Header UI
         val scoreText = "Score: $score"
         val scoreWidth = textPaint.measureText(scoreText)
         val scoreRect = RectF(60f, 80f, 60f + scoreWidth + 60f, 160f)
@@ -166,6 +188,7 @@ class GameView @JvmOverloads constructor(
         canvas.drawRoundRect(settingsRect, 40f, 40f, boardBorderPaint)
         canvas.drawCircle(settingsRect.centerX(), settingsRect.centerY(), 15f, boardBorderPaint)
 
+        // Game Board
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         canvas.drawRoundRect(rect, 30f, 30f, boardPaint)
         canvas.drawRoundRect(rect, 30f, 30f, boardBorderPaint)
@@ -176,6 +199,7 @@ class GameView @JvmOverloads constructor(
             strokeWidth = 3f
         }
 
+        // Draw Cells & Placed Blocks
         for (r in 0 until 8) {
             for (c in 0 until 8) {
                 val cx = boardX + c * cellSize
@@ -191,6 +215,7 @@ class GameView @JvmOverloads constructor(
             }
         }
 
+        // Premium Glowing Highlight under Finger
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 for (r in 0 until shape.rows) {
@@ -201,8 +226,9 @@ class GameView @JvmOverloads constructor(
                             if (targetR in 0..7 && targetC in 0..7) {
                                 val hx = boardX + targetC * cellSize
                                 val hy = boardY + targetR * cellSize
-                                val hRect = RectF(hx + 4, hy + 4, hx + cellSize - 4, hy + cellSize - 4)
-                                canvas.drawRoundRect(hRect, 12f, 12f, highlightPaint)
+                                val hRect = RectF(hx + 2, hy + 2, hx + cellSize - 2, hy + cellSize - 2)
+                                canvas.drawRoundRect(hRect, 16f, 16f, glowFillPaint)
+                                canvas.drawRoundRect(hRect, 16f, 16f, glowStrokePaint)
                             }
                         }
                     }
@@ -210,6 +236,7 @@ class GameView @JvmOverloads constructor(
             }
         }
 
+        // Tray Shapes
         for (i in 0 until 3) {
             if (i == draggingShapeIndex) continue
             val shape = trayShapes[i]
@@ -218,6 +245,7 @@ class GameView @JvmOverloads constructor(
             }
         }
 
+        // Restart Button
         val restartW = 300f
         restartRect.set((width - restartW)/2f, height - 200f, (width + restartW)/2f, height - 100f)
         val shadow = RectF(restartRect).apply { offset(0f, 10f) }
@@ -227,18 +255,15 @@ class GameView @JvmOverloads constructor(
         val tw = textPaint.measureText(rText)
         canvas.drawText(rText, restartRect.centerX() - tw/2f, restartRect.centerY() + 15f, textPaint)
 
+        // Dragging Shape (Now draws exactly at finger, no lag/lerp interpolation)
         draggingShape?.let { shape ->
-            var renderX = shape.cx
-            var renderY = shape.cy
+            drawShape(canvas, shape, shape.cx, shape.cy, cellSize)
+        }
 
-            if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
-                val snapX = boardX + hoverCol * cellSize
-                val snapY = boardY + hoverRow * cellSize
-                renderX = renderX * 0.2f + snapX * 0.8f
-                renderY = renderY * 0.2f + snapY * 0.8f
-            }
-
-            drawShape(canvas, shape, renderX, renderY, cellSize)
+        // Game Over Overlay
+        if (isGameOver) {
+            canvas.drawColor(0x99000000.toInt()) // Semi-transparent black background
+            canvas.drawText("OUT OF MOVES!", width / 2f, boardY + boardSize / 2f, gameOverTextPaint)
         }
     }
 
@@ -284,6 +309,9 @@ class GameView @JvmOverloads constructor(
                     restartGame()
                     return true
                 }
+                
+                // If game is over, prevent picking up pieces
+                if (isGameOver) return true 
 
                 for (i in 0 until 3) {
                     val shape = trayShapes[i]
@@ -317,7 +345,6 @@ class GameView @JvmOverloads constructor(
 
                     hoverCol = ((shape.cx + cellSize / 2 - boardX) / cellSize).roundToInt()
                     hoverRow = ((shape.cy + cellSize / 2 - boardY) / cellSize).roundToInt()
-
                     canFitHover = canPlaceShape(shape, hoverRow, hoverCol)
 
                     invalidate()
@@ -332,6 +359,9 @@ class GameView @JvmOverloads constructor(
 
                         if (trayShapes.all { it == null || it.placed }) {
                             fillTray()
+                        } else {
+                            // Har successful place ke baad bhi game over check karo
+                            checkGameOver()
                         }
                     } else {
                         updateTrayPositions()
@@ -398,12 +428,38 @@ class GameView @JvmOverloads constructor(
             score += 100
         }
     }
+    
+    // Core Logic for Game Over Validation
+    private fun checkGameOver() {
+        var canMakeMove = false
+        
+        for (shape in trayShapes) {
+            if (shape != null && !shape.placed) {
+                for (r in 0 until 8) {
+                    for (c in 0 until 8) {
+                        if (canPlaceShape(shape, r, c)) {
+                            canMakeMove = true
+                            break
+                        }
+                    }
+                    if (canMakeMove) break
+                }
+            }
+            if (canMakeMove) break
+        }
+        
+        if (!canMakeMove) {
+            isGameOver = true
+            invalidate() // Trigger redraw to show "OUT OF MOVES!" screen
+        }
+    }
 
     private fun restartGame() {
         for (r in 0 until 8) {
             for (c in 0 until 8) grid[r][c] = 0
         }
         score = 0
+        isGameOver = false
         for (i in 0 until 3) trayShapes[i] = null
         fillTray()
         invalidate()
