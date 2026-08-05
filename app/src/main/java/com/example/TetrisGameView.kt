@@ -14,8 +14,6 @@ class TetrisGameView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     private val soundManager = SoundManager(context)
-    
-    // Tetris Grid: 10 Columns, 20 Rows
     private val COLS = 10
     private val ROWS = 20
     private val grid = Array(ROWS) { IntArray(COLS) { 0 } }
@@ -23,7 +21,6 @@ class TetrisGameView @JvmOverloads constructor(
     private var score = 0
     private var isGameOver = false
 
-    // Paints
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF141E30.toInt(); style = Paint.Style.FILL }
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 10f }
@@ -33,28 +30,24 @@ class TetrisGameView @JvmOverloads constructor(
     private val blockDarkEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55000000; style = Paint.Style.FILL }
     private val emptyPaint = Paint().apply { color = 0x1AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 3f }
 
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 60f; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(10f, 0f, 0f, Color.BLACK) }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 50f; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(10f, 0f, 0f, Color.BLACK) }
     private val overlayTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF5E62.toInt(); textSize = 90f; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER; setShadowLayer(15f, 0f, 10f, Color.BLACK) }
     
-    // Control Button Paints
-    private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x88000000.toInt(); style = Paint.Style.FILL }
-    private val btnStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 5f }
-    private val btnIconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 70f; textAlign = Paint.Align.CENTER }
+    private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66000000.toInt(); style = Paint.Style.FILL }
+    private val btnStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 6f }
+    private val btnIconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 75f; textAlign = Paint.Align.CENTER }
 
-    // Layout Dimensions
     private var cellSize = 0f
     private var boardSizeW = 0f
     private var boardSizeH = 0f
     private var boardX = 0f
     private var boardY = 0f
 
-    // Buttons Rectangles
     private val btnLeft = RectF()
     private val btnRotate = RectF()
     private val btnDown = RectF()
     private val btnRight = RectF()
 
-    // Tetromino Shapes
     val SHAPES = listOf(
         arrayOf(intArrayOf(1, 1, 1, 1)), // I
         arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), // O
@@ -66,13 +59,13 @@ class TetrisGameView @JvmOverloads constructor(
     )
 
     class Tetromino(var matrix: Array<IntArray>, val colorId: Int) {
-        var x = 4
+        var x = 3
         var y = 0
     }
 
     private var currentPiece: Tetromino? = null
+    private var nextPiece: Tetromino? = null
     
-    // Game Loop Timer
     private val handler = Handler(Looper.getMainLooper())
     private var speedMs = 600L
     private val gameLoop = object : Runnable {
@@ -86,33 +79,45 @@ class TetrisGameView @JvmOverloads constructor(
     }
 
     init {
+        nextPiece = generatePiece()
         spawnPiece()
         handler.postDelayed(gameLoop, speedMs)
     }
 
+    private fun generatePiece(): Tetromino {
+        val matrix = SHAPES[Random.nextInt(SHAPES.size)]
+        val copy = Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }
+        return Tetromino(copy, Random.nextInt(1, 6))
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        val padding = 40f
+        // Board aur chhota kiya, padding badha kar
+        val padding = w * 0.2f 
         boardSizeW = w - padding * 2
         cellSize = boardSizeW / COLS
         boardSizeH = cellSize * ROWS
         
         boardX = padding
-        boardY = 150f
+        boardY = 160f
 
-        val btnY = boardY + boardSizeH + 80f
-        val bw = (w - padding * 2) / 4f
+        // One-Hand Joystick Layout (Center me)
+        val controlCenterY = boardY + boardSizeH + 200f
+        val controlCenterX = w / 2f
+        val btnSize = 140f
+        val gap = 20f
         
-        btnLeft.set(padding, btnY, padding + bw - 10f, btnY + 140f)
-        btnRotate.set(padding + bw, btnY, padding + bw * 2 - 10f, btnY + 140f)
-        btnDown.set(padding + bw * 2, btnY, padding + bw * 3 - 10f, btnY + 140f)
-        btnRight.set(padding + bw * 3, btnY, padding + bw * 4 - 10f, btnY + 140f)
+        // Beech me Rotate
+        btnRotate.set(controlCenterX - btnSize/2, controlCenterY - btnSize - gap, controlCenterX + btnSize/2, controlCenterY - gap)
+        // Uske neeche line me: Left - Down - Right
+        btnLeft.set(controlCenterX - btnSize - btnSize/2 - gap, controlCenterY, controlCenterX - btnSize/2 - gap, controlCenterY + btnSize)
+        btnDown.set(controlCenterX - btnSize/2, controlCenterY, controlCenterX + btnSize/2, controlCenterY + btnSize)
+        btnRight.set(controlCenterX + btnSize/2 + gap, controlCenterY, controlCenterX + btnSize + btnSize/2 + gap, controlCenterY + btnSize)
     }
 
     private fun spawnPiece() {
-        val matrix = SHAPES[Random.nextInt(SHAPES.size)]
-        val copy = Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }
-        currentPiece = Tetromino(copy, Random.nextInt(1, 6))
+        currentPiece = nextPiece
+        nextPiece = generatePiece()
         
         if (!isValidPosition(currentPiece!!.matrix, currentPiece!!.x, currentPiece!!.y)) {
             isGameOver = true
@@ -125,7 +130,23 @@ class TetrisGameView @JvmOverloads constructor(
         bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), 0xFF0B1021.toInt(), 0xFF060913.toInt(), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        canvas.drawText("SCORE: $score", boardX, 100f, textPaint)
+        // Top UI & Next Shape preview
+        canvas.drawText("SCORE: $score", boardX - 30f, 100f, textPaint)
+        
+        val nextTitleX = boardX + boardSizeW - 50f
+        canvas.drawText("NEXT", nextTitleX, 80f, Paint(textPaint).apply { textSize = 40f })
+        nextPiece?.let { piece ->
+            val previewSize = cellSize * 0.7f
+            for (r in 0 until piece.matrix.size) {
+                for (c in 0 until piece.matrix[0].size) {
+                    if (piece.matrix[r][c] != 0) {
+                        val px = nextTitleX + c * previewSize
+                        val py = 100f + r * previewSize
+                        draw3DBlock(canvas, px, py, previewSize, piece.colorId)
+                    }
+                }
+            }
+        }
 
         val rect = RectF(boardX, boardY, boardX + boardSizeW, boardY + boardSizeH)
         canvas.drawRect(rect, boardPaint)
@@ -136,13 +157,9 @@ class TetrisGameView @JvmOverloads constructor(
                 val cx = boardX + c * cellSize
                 val cy = boardY + r * cellSize
                 val cellId = grid[r][c]
-                
                 val cellRect = RectF(cx, cy, cx + cellSize, cy + cellSize)
                 canvas.drawRect(cellRect, emptyPaint)
-                
-                if (cellId != 0) {
-                    draw3DBlock(canvas, cx, cy, cellSize, cellId)
-                }
+                if (cellId != 0) draw3DBlock(canvas, cx, cy, cellSize, cellId)
             }
         }
 
@@ -158,6 +175,7 @@ class TetrisGameView @JvmOverloads constructor(
             }
         }
 
+        // Draw D-Pad Controls
         drawControlButton(canvas, btnLeft, "◀")
         drawControlButton(canvas, btnRotate, "↻")
         drawControlButton(canvas, btnDown, "▼")
@@ -170,8 +188,12 @@ class TetrisGameView @JvmOverloads constructor(
     }
 
     private fun drawControlButton(canvas: Canvas, rect: RectF, icon: String) {
-        canvas.drawRoundRect(rect, 20f, 20f, btnPaint)
-        canvas.drawRoundRect(rect, 20f, 20f, btnStrokePaint)
+        // Drop shadow for buttons
+        val shadow = RectF(rect).apply { offset(0f, 8f) }
+        canvas.drawRoundRect(shadow, 30f, 30f, Paint().apply { color = 0xAA000000.toInt() })
+        
+        canvas.drawRoundRect(rect, 30f, 30f, btnPaint)
+        canvas.drawRoundRect(rect, 30f, 30f, btnStrokePaint)
         val textOffset = (btnIconPaint.descent() + btnIconPaint.ascent()) / 2f
         canvas.drawText(icon, rect.centerX(), rect.centerY() - textOffset, btnIconPaint)
     }
@@ -212,7 +234,6 @@ class TetrisGameView @JvmOverloads constructor(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (isGameOver || event.action != MotionEvent.ACTION_DOWN) return true
-        
         val tx = event.x
         val ty = event.y
 
@@ -229,17 +250,8 @@ class TetrisGameView @JvmOverloads constructor(
         return true
     }
 
-    private fun moveLeft() {
-        currentPiece?.let {
-            if (isValidPosition(it.matrix, it.x - 1, it.y)) it.x--
-        }
-    }
-
-    private fun moveRight() {
-        currentPiece?.let {
-            if (isValidPosition(it.matrix, it.x + 1, it.y)) it.x++
-        }
-    }
+    private fun moveLeft() { currentPiece?.let { if (isValidPosition(it.matrix, it.x - 1, it.y)) it.x-- } }
+    private fun moveRight() { currentPiece?.let { if (isValidPosition(it.matrix, it.x + 1, it.y)) it.x++ } }
 
     private fun rotatePiece() {
         currentPiece?.let {
@@ -247,9 +259,7 @@ class TetrisGameView @JvmOverloads constructor(
             val cols = it.matrix[0].size
             val newMatrix = Array(cols) { IntArray(rows) }
             for (r in 0 until rows) {
-                for (c in 0 until cols) {
-                    newMatrix[c][rows - 1 - r] = it.matrix[r][c]
-                }
+                for (c in 0 until cols) { newMatrix[c][rows - 1 - r] = it.matrix[r][c] }
             }
             if (isValidPosition(newMatrix, it.x, it.y)) {
                 it.matrix = newMatrix
@@ -276,9 +286,7 @@ class TetrisGameView @JvmOverloads constructor(
                     if (piece.matrix[r][c] != 0) {
                         val gridY = piece.y + r
                         val gridX = piece.x + c
-                        if (gridY in 0 until ROWS && gridX in 0 until COLS) {
-                            grid[gridY][gridX] = piece.colorId
-                        }
+                        if (gridY in 0 until ROWS && gridX in 0 until COLS) grid[gridY][gridX] = piece.colorId
                     }
                 }
             }
@@ -287,29 +295,22 @@ class TetrisGameView @JvmOverloads constructor(
         }
     }
 
-    // Yahan While Loop se fix kiya gaya hai
     private fun checkLines() {
         var linesCleared = 0
         var r = ROWS - 1
-        
         while (r >= 0) {
             var isFull = true
-            for (c in 0 until COLS) {
-                if (grid[r][c] == 0) { isFull = false; break }
-            }
-            
+            for (c in 0 until COLS) { if (grid[r][c] == 0) { isFull = false; break } }
             if (isFull) {
                 linesCleared++
                 for (shiftR in r downTo 1) {
-                    for (c in 0 until COLS) { grid[shiftR][c] = grid[shiftR - 1][c] }
+                    for (c in 0 until COLS) grid[shiftR][c] = grid[shiftR - 1][c]
                 }
                 for (c in 0 until COLS) grid[0][c] = 0
-                // r-- nahi kiya taaki upar se jo line aayi hai wo bhi wapas check ho jaye
             } else {
                 r--
             }
         }
-        
         if (linesCleared > 0) {
             soundManager.playClear()
             score += (linesCleared * 100) * linesCleared
