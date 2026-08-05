@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,13 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -41,112 +44,132 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainMenuScreen() {
     val context = LocalContext.current
-    
-    val bgBrush = Brush.verticalGradient(
-        colors = listOf(Color(0xFF162456), Color(0xFF0A0D24))
-    )
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(bgBrush)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "BOX BLAST",
-            style = TextStyle(
-                fontSize = 54.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFFFFdf38),
-                shadow = Shadow(
-                    color = Color(0x99000000),
-                    blurRadius = 15f
-                ),
-                textAlign = TextAlign.Center
-            ),
-            modifier = Modifier.padding(bottom = 60.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 1. Premium Background Image (Jisme Logo pehle se hai)
+        Image(
+            painter = painterResource(id = R.drawable.bg_main), // Make sure image is named bg_main.jpg in drawable folder
+            contentDescription = "Background",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
         )
 
-        // Classic Mode
-        GameModeButton(
-            title = "CLASSIC MODE",
-            subtitle = "Score High & Relax",
-            topColor = Color(0xFF2CD04E),
-            bottomColor = Color(0xFF199131)
+        // 2. Buttons positioned at the bottom, just like the reference image
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 60.dp), // Thodi neeche se jagah chhodne ke liye
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Bottom
         ) {
-            context.startActivity(Intent(context, ClassicGameActivity::class.java))
-        }
+            
+            // TETRIS Mode (Big Golden Button - Like "PLAY")
+            PremiumButton(
+                title = "TETRIS FALL",
+                icon = "🧩",
+                topColor = Color(0xFFFFDF00),
+                bottomColor = Color(0xFFE67300),
+                borderColor = Color(0xFFFFFF88)
+            ) {
+                // TODO: Tetris Activity
+            }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-        // Adventure Mode
-        GameModeButton(
-            title = "ADVENTURE",
-            subtitle = "Collect Gems & Candies",
-            topColor = Color(0xFFB92B27),
-            bottomColor = Color(0xFF6C1613)
-        ) {
-            context.startActivity(Intent(context, AdventureGameActivity::class.java))
-        }
+            // ADVENTURE Mode (Medium Blue Button)
+            PremiumButton(
+                title = "ADVENTURE",
+                icon = "🗺️",
+                topColor = Color(0xFF42E5FF),
+                bottomColor = Color(0xFF0055FF),
+                borderColor = Color(0xFF8BFFFF)
+            ) {
+                context.startActivity(Intent(context, AdventureGameActivity::class.java))
+            }
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-        // Tetris Mode (Agle step me active karenge)
-        GameModeButton(
-            title = "TETRIS FALL",
-            subtitle = "Rotate & Drop",
-            topColor = Color(0xFF00C6FF),
-            bottomColor = Color(0xFF0072FF)
-        ) {
-            // TODO: Start Tetris Activity
+            // CLASSIC Mode (Medium Purple Button)
+            PremiumButton(
+                title = "CLASSIC",
+                icon = "👑",
+                topColor = Color(0xFFB452FF),
+                bottomColor = Color(0xFF5E17EB),
+                borderColor = Color(0xFFE48DFF)
+            ) {
+                context.startActivity(Intent(context, ClassicGameActivity::class.java))
+            }
         }
     }
 }
 
+// Bilkul Reference Image jaisa 3D Glossy Button
 @Composable
-fun GameModeButton(
+fun PremiumButton(
     title: String,
-    subtitle: String,
+    icon: String,
     topColor: Color,
     bottomColor: Color,
+    borderColor: Color,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
+    // Smooth 3D Bounce Animation
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "bounce")
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxWidth(0.75f) // Width reference image ke hisab se perfect hai
+            .height(72.dp) // Thoda mota/chunky feel dene ke liye
             .scale(scale)
-            .shadow(if (isPressed) 2.dp else 10.dp, RoundedCornerShape(24.dp))
-            .clip(RoundedCornerShape(24.dp))
+            .shadow(16.dp, RoundedCornerShape(36.dp), spotColor = bottomColor) // Glow type shadow
+            .clip(RoundedCornerShape(36.dp))
             .background(Brush.verticalGradient(listOf(topColor, bottomColor)))
-            .border(3.dp, Color(0x66FFFFFF), RoundedCornerShape(24.dp))
+            .border(3.dp, borderColor, RoundedCornerShape(36.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            )
-            .padding(vertical = 20.dp),
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Inner Glossy Highlight (3D Bevel simulation)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(3.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0x66FFFFFF), Color(0x00FFFFFF), Color(0x33000000))
+                    ),
+                    RoundedCornerShape(33.dp)
+                )
+        )
+
+        // Text & Icon Row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = icon,
+                fontSize = 28.sp,
+                modifier = Modifier.padding(end = 12.dp)
+            )
             Text(
                 text = title,
                 color = Color.White,
                 fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                style = TextStyle(shadow = Shadow(color = Color(0x66000000), blurRadius = 5f))
-            )
-            Text(
-                text = subtitle,
-                color = Color(0xCCFFFFFF),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.ExtraBold,
+                style = TextStyle(
+                    shadow = Shadow(
+                        color = Color(0xAA000000), 
+                        blurRadius = 8f, 
+                        offset = Offset(2f, 4f)
+                    )
+                )
             )
         }
     }
