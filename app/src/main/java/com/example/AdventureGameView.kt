@@ -5,7 +5,9 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.random.Random
 
 class AdventureGameView @JvmOverloads constructor(
@@ -16,30 +18,28 @@ class AdventureGameView @JvmOverloads constructor(
     private val grid = Array(8) { IntArray(8) { 0 } }
     
     // Level & Gems Logic
-    private var targetGems = 10
+    private var targetGems = 20
     private var gemsCollected = 0
     private var isGameOver = false
     private var isLevelComplete = false
 
+    // Flying Animation Data
+    data class FlyingGem(var startX: Float, var startY: Float, var progress: Float = 0f)
+    private val flyingGems = mutableListOf<FlyingGem>()
+
     // Paints
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2A1B38.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD537FE.toInt(); style = Paint.Style.STROKE; strokeWidth = 10f }
-    private val blockPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val blockShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x88000000.toInt(); style = Paint.Style.FILL }
-    private val blockGlossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x77FFFFFF; style = Paint.Style.STROKE; strokeWidth = 3f }
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1B264A.toInt(); style = Paint.Style.FILL }
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF354B8B.toInt(); style = Paint.Style.STROKE; strokeWidth = 12f }
     
-    // Gem Paint
-    private val gemGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFF007F.toInt()
-        style = Paint.Style.FILL
-        setShadowLayer(15f, 0f, 0f, 0xFFFF007F.toInt())
-    }
+    private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val blockLightEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55FFFFFF; style = Paint.Style.FILL }
+    private val blockDarkEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55000000; style = Paint.Style.FILL }
 
-    private val glowStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFD700.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(20f, 0f, 0f, 0xFFFFD700.toInt()) }
-    private val glowFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x44FFD700; style = Paint.Style.FILL }
-    private val targetTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFD700.toInt(); textSize = 60f; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(10f, 0f, 0f, Color.BLACK) }
-    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1D3273.toInt(); style = Paint.Style.FILL }
+    private val glowStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(25f, 0f, 0f, 0xFF42E5FF.toInt()) }
+    private val glowFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x4442E5FF; style = Paint.Style.FILL }
+    
+    private val targetTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 65f; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(10f, 0f, 0f, Color.BLACK) }
     private val overlayTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF38EF7D.toInt(); textSize = 90f; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER; setShadowLayer(15f, 0f, 10f, Color.BLACK) }
 
     private var cellSize = 0f
@@ -48,14 +48,16 @@ class AdventureGameView @JvmOverloads constructor(
     private var boardY = 0f
     private var trayY = 0f
     private var trayCellSize = 0f
+    
+    private var targetUiX = 0f
+    private var targetUiY = 120f
 
     val SHAPES = listOf(
         arrayOf(intArrayOf(1)), arrayOf(intArrayOf(1, 1)), arrayOf(intArrayOf(1), intArrayOf(1)),
         arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(1, 1, 1)),
         arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1, 1, 1, 1)),
-        arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)),
-        arrayOf(intArrayOf(0, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(1, 1), intArrayOf(1, 0)),
-        arrayOf(intArrayOf(1, 1), intArrayOf(0, 1))
+        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)), arrayOf(intArrayOf(0, 1), intArrayOf(1, 1)), 
+        arrayOf(intArrayOf(1, 1), intArrayOf(1, 0)), arrayOf(intArrayOf(1, 1), intArrayOf(0, 1))
     )
 
     class Shape(val matrix: Array<IntArray>, val colorId: Int) {
@@ -75,12 +77,11 @@ class AdventureGameView @JvmOverloads constructor(
     }
 
     private fun initLevel() {
-        for (r in 0 until 8) {
-            for (c in 0 until 8) grid[r][c] = 0
-        }
+        for (r in 0 until 8) { for (c in 0 until 8) grid[r][c] = 0 }
         
+        // Spawn Gems (ID 10 = Star)
         var spawned = 0
-        while(spawned < targetGems) {
+        while(spawned < 8) {
             val r = Random.nextInt(8)
             val c = Random.nextInt(8)
             if (grid[r][c] == 0) {
@@ -107,13 +108,15 @@ class AdventureGameView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        val padding = 35f 
+        val padding = 30f 
         boardSize = w - padding * 2
         cellSize = boardSize / 8
         boardX = padding
         boardY = padding + 220f
-        trayY = boardY + boardSize + 80f
+        trayY = boardY + boardSize + 100f
         trayCellSize = cellSize * 0.65f
+        
+        targetUiX = w / 2f
         updateTrayPositions()
     }
 
@@ -133,32 +136,38 @@ class AdventureGameView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), 0xFF1B0B24.toInt(), 0xFF0B0510.toInt(), Shader.TileMode.CLAMP)
+        // Video Jaisa Dark Blue Background
+        bgPaint.color = 0xFF2A3A6A.toInt()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        val targetText = "Gems: $gemsCollected / $targetGems"
-        val scoreRect = RectF(50f, 70f, width - 50f, 150f)
-        canvas.drawRoundRect(scoreRect, 40f, 40f, pillPaint)
-        canvas.drawRoundRect(scoreRect, 40f, 40f, boardBorderPaint)
-        canvas.drawText(targetText, width / 2f - targetTextPaint.measureText(targetText)/2f, 125f, targetTextPaint)
+        // Target UI Top Center
+        drawStarGem(canvas, targetUiX - 60f, targetUiY - 40f, 50f)
+        val targetText = "$gemsCollected / $targetGems"
+        canvas.drawText(targetText, targetUiX + 10f, targetUiY + 10f, targetTextPaint)
 
+        // Board Background
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
-        canvas.drawRoundRect(rect, 24f, 24f, boardPaint)
-        canvas.drawRoundRect(rect, 24f, 24f, boardBorderPaint)
+        canvas.drawRoundRect(rect, 16f, 16f, boardPaint)
+        canvas.drawRoundRect(rect, 16f, 16f, boardBorderPaint)
 
-        val emptyPaint = Paint().apply { color = 0x22FFFFFF; style = Paint.Style.STROKE; strokeWidth = 4f }
+        val emptyPaint = Paint().apply { color = 0x1AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 3f }
 
+        // Draw Grid and Blocks
         for (r in 0 until 8) {
             for (c in 0 until 8) {
                 val cx = boardX + c * cellSize
                 val cy = boardY + r * cellSize
                 val cellId = grid[r][c]
                 val cellRect = RectF(cx + 2, cy + 2, cx + cellSize - 2, cy + cellSize - 2)
-                canvas.drawRoundRect(cellRect, 12f, 12f, emptyPaint)
-                if (cellId != 0) drawBlock(canvas, cx, cy, cellSize, cellId)
+                canvas.drawRoundRect(cellRect, 8f, 8f, emptyPaint)
+                
+                if (cellId != 0) {
+                    draw3DBlock(canvas, cx, cy, cellSize, cellId)
+                }
             }
         }
 
+        // Magnet Snap Highlight
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 for (r in 0 until shape.rows) {
@@ -166,21 +175,23 @@ class AdventureGameView @JvmOverloads constructor(
                         if (shape.matrix[r][c] != 0) {
                             val hx = boardX + (hoverCol + c) * cellSize
                             val hy = boardY + (hoverRow + r) * cellSize
-                            val hRect = RectF(hx + 2, hy + 2, hx + cellSize - 2, hy + cellSize - 2)
-                            canvas.drawRoundRect(hRect, 16f, 16f, glowFillPaint)
-                            canvas.drawRoundRect(hRect, 16f, 16f, glowStrokePaint)
+                            val hRect = RectF(hx, hy, hx + cellSize, hy + cellSize)
+                            canvas.drawRoundRect(hRect, 8f, 8f, glowFillPaint)
+                            canvas.drawRoundRect(hRect, 8f, 8f, glowStrokePaint)
                         }
                     }
                 }
             }
         }
 
+        // Draw Tray Shapes
         for (i in 0 until 3) {
             if (i == draggingShapeIndex) continue
             val shape = trayShapes[i]
             if (shape != null && !shape.placed) drawShape(canvas, shape, shape.cx, shape.cy, trayCellSize)
         }
 
+        // Draw Dragging Shape
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 drawShape(canvas, shape, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize)
@@ -189,62 +200,123 @@ class AdventureGameView @JvmOverloads constructor(
             }
         }
 
-        if (isLevelComplete) {
+        // Fly Animations Render
+        if (flyingGems.isNotEmpty()) {
+            val iterator = flyingGems.iterator()
+            while (iterator.hasNext()) {
+                val gem = iterator.next()
+                gem.progress += 0.04f // Speed of flying
+                
+                if (gem.progress >= 1f) {
+                    gemsCollected++
+                    if (gemsCollected >= targetGems) isLevelComplete = true
+                    soundManager.playPick() // Tink sound when it reaches target
+                    iterator.remove()
+                } else {
+                    // Smooth lerp towards Target UI
+                    val currentX = gem.startX + (targetUiX - 60f - gem.startX) * gem.progress
+                    val currentY = gem.startY + (targetUiY - 40f - gem.startY) * gem.progress
+                    drawStarGem(canvas, currentX, currentY, cellSize * 0.7f)
+                }
+            }
+            invalidate() // Keep rendering while flying
+        }
+
+        // Overlays
+        if (isLevelComplete && flyingGems.isEmpty()) {
             canvas.drawColor(0xDD000000.toInt())
-            canvas.drawText("LEVEL COMPLETE!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
+            canvas.drawText("WELL DONE!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
         } else if (isGameOver) {
             overlayTextPaint.color = 0xFFFF5E62.toInt()
             canvas.drawColor(0xDD000000.toInt())
-            canvas.drawText("OUT OF MOVES!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
+            canvas.drawText("NO MOVES!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
         }
     }
 
     private fun drawShape(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         for (r in 0 until shape.rows) {
             for (c in 0 until shape.cols) {
-                if (shape.matrix[r][c] != 0) drawBlock(canvas, x + c * size, y + r * size, size, shape.colorId)
+                if (shape.matrix[r][c] != 0) draw3DBlock(canvas, x + c * size, y + r * size, size, shape.colorId)
             }
         }
     }
 
-    private fun drawBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
-        val p = 3f
+    // Video-style 3D Beveled Blocks
+    private fun draw3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
+        val p = 1f
         val rect = RectF(x + p, y + p, x + size - p, y + size - p)
-        val rad = size * 0.2f
-
+        
         if (colorId == 10) {
-            canvas.drawRoundRect(rect, rad, rad, gemGlowPaint)
-            val path = Path().apply {
-                moveTo(rect.centerX(), rect.top + 5f)
-                lineTo(rect.right - 5f, rect.centerY())
-                lineTo(rect.centerX(), rect.bottom - 5f)
-                lineTo(rect.left + 5f, rect.centerY())
-                close()
-            }
-            val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAAFFFFFF.toInt(); style = Paint.Style.FILL }
-            canvas.drawPath(path, whitePaint)
+            // Draw Gem Block
+            blockBasePaint.color = 0xFFE0A800.toInt() // Golden Block
+            canvas.drawRoundRect(rect, 12f, 12f, blockBasePaint)
+            drawStarGem(canvas, x + size/2 - size*0.35f, y + size/2 - size*0.35f, size * 0.7f)
             return
         }
 
-        val shadowRect = RectF(rect).apply { offset(0f, 6f) }
-        canvas.drawRoundRect(shadowRect, rad, rad, blockShadowPaint)
+        // 1. Draw Base Color
+        blockBasePaint.color = getBaseColor(colorId)
+        canvas.drawRoundRect(rect, 12f, 12f, blockBasePaint)
 
-        val (topColor, bottomColor) = getGradientColors(colorId)
-        blockPaint.shader = LinearGradient(rect.left, rect.top, rect.left, rect.bottom, topColor, bottomColor, Shader.TileMode.CLAMP)
-        canvas.drawRoundRect(rect, rad, rad, blockPaint)
+        // 2. Draw 3D Light Top-Left Bevel
+        val bevelSize = size * 0.15f
+        val lightPath = Path().apply {
+            moveTo(rect.left, rect.top)
+            lineTo(rect.right, rect.top)
+            lineTo(rect.right - bevelSize, rect.top + bevelSize)
+            lineTo(rect.left + bevelSize, rect.top + bevelSize)
+            lineTo(rect.left + bevelSize, rect.bottom - bevelSize)
+            lineTo(rect.left, rect.bottom)
+            close()
+        }
+        canvas.drawPath(lightPath, blockLightEdgePaint)
 
-        val glossRect = RectF(rect.left + 2f, rect.top + 2f, rect.right - 2f, rect.bottom - 4f)
-        canvas.drawRoundRect(glossRect, rad - 2f, rad - 2f, blockGlossPaint)
+        // 3. Draw 3D Dark Bottom-Right Bevel
+        val darkPath = Path().apply {
+            moveTo(rect.right, rect.bottom)
+            lineTo(rect.left, rect.bottom)
+            lineTo(rect.left + bevelSize, rect.bottom - bevelSize)
+            lineTo(rect.right - bevelSize, rect.bottom - bevelSize)
+            lineTo(rect.right - bevelSize, rect.top + bevelSize)
+            lineTo(rect.right, rect.top)
+            close()
+        }
+        canvas.drawPath(darkPath, blockDarkEdgePaint)
     }
 
-    private fun getGradientColors(id: Int): Pair<Int, Int> {
+    // Custom Star Drawing for Gems
+    private fun drawStarGem(canvas: Canvas, x: Float, y: Float, size: Float) {
+        val cx = x + size / 2f
+        val cy = y + size / 2f
+        val outerRadius = size / 2f
+        val innerRadius = outerRadius / 2.2f
+
+        val path = Path()
+        for (i in 0 until 10) {
+            val angle = i * (Math.PI / 5) - (Math.PI / 2)
+            val radius = if (i % 2 == 0) outerRadius else innerRadius
+            val px = cx + cos(angle).toFloat() * radius
+            val py = cy + sin(angle).toFloat() * radius
+            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        path.close()
+
+        val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFD700.toInt(); style = Paint.Style.FILL }
+        canvas.drawPath(path, starPaint)
+        
+        // Inner highlight
+        starPaint.color = 0xAAFFFFFF.toInt()
+        canvas.drawCircle(cx - size*0.1f, cy - size*0.1f, size*0.15f, starPaint)
+    }
+
+    private fun getBaseColor(id: Int): Int {
         return when (id) {
-            1 -> Pair(0xFFFF5E62.toInt(), 0xFFC7181E.toInt())
-            2 -> Pair(0xFF00C6FF.toInt(), 0xFF0061D9.toInt())
-            3 -> Pair(0xFF38EF7D.toInt(), 0xFF11998E.toInt())
-            4 -> Pair(0xFFFFFC00.toInt(), 0xFFE6A300.toInt())
-            5 -> Pair(0xFFD537FE.toInt(), 0xFF8A00B0.toInt())
-            else -> Pair(0xFFFFFFFF.toInt(), 0xFFAAAAAA.toInt())
+            1 -> 0xFFD82835.toInt() // Red
+            2 -> 0xFF35A3FF.toInt() // Light Blue
+            3 -> 0xFF5DD932.toInt() // Green
+            4 -> 0xFFFFC20A.toInt() // Yellow
+            5 -> 0xFF9E42F5.toInt() // Purple
+            else -> 0xFFFFFFFF.toInt()
         }
     }
 
@@ -265,7 +337,7 @@ class AdventureGameView @JvmOverloads constructor(
                             draggingShapeIndex = i
                             draggingShape = shape
                             shape.cx = tx - (shape.cols * cellSize) / 2f
-                            shape.cy = ty - (shape.rows * cellSize) - 120f
+                            shape.cy = ty - (shape.rows * cellSize) - 150f
                             dragTouchOffsetX = tx - shape.cx
                             dragTouchOffsetY = ty - shape.cy
                             invalidate()
@@ -335,27 +407,28 @@ class AdventureGameView @JvmOverloads constructor(
         for (r in 0 until 8) { if ((0 until 8).all { c -> grid[r][c] != 0 }) rowsToClear.add(r) }
         for (c in 0 until 8) { if ((0 until 8).all { r -> grid[r][c] != 0 }) colsToClear.add(c) }
 
-        if (rowsToClear.isNotEmpty() || colsToClear.isNotEmpty()) soundManager.playClear()
-
-        var gemsClearedThisMove = 0
-
-        for (r in rowsToClear) {
-            for (c in 0 until 8) {
-                if (grid[r][c] == 10) gemsClearedThisMove++
-                grid[r][c] = 0
-            }
-        }
-        for (c in colsToClear) {
-            for (r in 0 until 8) {
-                if (grid[r][c] == 10) gemsClearedThisMove++
-                grid[r][c] = 0
-            }
-        }
-
-        gemsCollected += gemsClearedThisMove
-        if (gemsCollected >= targetGems) {
-            isLevelComplete = true
+        if (rowsToClear.isNotEmpty() || colsToClear.isNotEmpty()) {
             soundManager.playClear()
+            
+            // Collect Gems Logic with Flying Animation
+            for (r in rowsToClear) {
+                for (c in 0 until 8) {
+                    if (grid[r][c] == 10) {
+                        flyingGems.add(FlyingGem(boardX + c * cellSize, boardY + r * cellSize))
+                    }
+                    grid[r][c] = 0
+                }
+            }
+            for (c in colsToClear) {
+                for (r in 0 until 8) {
+                    if (grid[r][c] == 10) {
+                        flyingGems.add(FlyingGem(boardX + c * cellSize, boardY + r * cellSize))
+                    }
+                    grid[r][c] = 0
+                }
+            }
+            
+            if(flyingGems.isNotEmpty()) invalidate() // Trigger animation loop
         }
     }
 
