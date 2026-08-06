@@ -106,6 +106,7 @@ class AdventureGameView @JvmOverloads constructor(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
+                @Suppress("DEPRECATION")
                 vibrator.vibrate(duration)
             }
         } catch (e: Exception) { }
@@ -160,6 +161,21 @@ class AdventureGameView @JvmOverloads constructor(
         val bw = 400f; val bh = 120f
         nextLevelBtnRect.set(w/2f - bw/2f, boardY + boardSize/2f + 100f, w/2f + bw/2f, boardY + boardSize/2f + 100f + bh)
         updateTrayPositions()
+    }
+
+    // MISSING FUNCTION ADDED HERE
+    private fun updateTrayPositions() {
+        if (width == 0) return
+        val sectionWidth = width / 3f
+        for (i in 0 until 3) {
+            val shape = trayShapes[i]
+            if (shape != null && !shape.placed) {
+                val shapeWidth = shape.cols * trayCellSize
+                val shapeHeight = shape.rows * trayCellSize
+                shape.cx = (i * sectionWidth) + (sectionWidth - shapeWidth) / 2f
+                shape.cy = trayY + (sectionWidth - shapeHeight) / 2f
+            }
+        }
     }
 
     private fun drawGeminiBackground(canvas: Canvas) {
@@ -280,7 +296,6 @@ class AdventureGameView @JvmOverloads constructor(
     }
 
     private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
-        // ERROR FIX: Loop to find the correct color safely
         var firstColorId = 0
         for (row in shape.matrix) {
             for (cell in row) {
