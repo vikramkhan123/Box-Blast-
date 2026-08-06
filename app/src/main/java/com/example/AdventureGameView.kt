@@ -79,9 +79,16 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
+                soundManager.playCountdownTick() // ONLY TICK TICK
                 adCountdown--
-                soundManager.playCountdownTick()
-                if (adCountdown == 0) { isWaitingForAd = false; isGameOver = true; soundManager.playGameOver() } else handler.postDelayed(this, 1000L)
+                if (adCountdown == 0) { 
+                    isWaitingForAd = false
+                    isGameOver = true 
+                    soundManager.playGameOver() // Play game over when timer hits 0
+                } else {
+                    handler.postDelayed(this, 1000L)
+                }
+                invalidate()
             }
         }
     }
@@ -257,18 +264,17 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
         val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
-        if (colorId >= 10) {
-            blockBasePaint.color = 0xFF0D152B.toInt(); canvas.drawRoundRect(rect, 16f, 16f, blockBasePaint)
-            val innerRect = RectF(rect.left + 8f, rect.top + 8f, rect.right - 8f, rect.bottom - 8f)
-            blockBasePaint.color = 0xFF050A1A.toInt(); canvas.drawRoundRect(innerRect, 8f, 8f, blockBasePaint)
-            drawGemShape(canvas, x + size * 0.15f, y + size * 0.15f, size * 0.7f, colorId); return
-        }
-        val baseColor = getBaseColor(colorId)
+        
+        val baseColor = getBaseColor(if (colorId >= 10) (colorId - 9) else colorId)
+        
         val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, intArrayOf(adjustColorLightness(baseColor, 1.4f), baseColor, adjustColorLightness(baseColor, 0.6f)), null, Shader.TileMode.CLAMP)
         blockBasePaint.shader = grad; canvas.drawRoundRect(rect, 16f, 16f, blockBasePaint); blockBasePaint.shader = null 
+        
         val overlayRect = RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.top + size * 0.4f)
         val shineGrad = LinearGradient(overlayRect.left, overlayRect.top, overlayRect.left, overlayRect.bottom, 0x88FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
         glassOverlayPaint.shader = shineGrad; canvas.drawRoundRect(overlayRect, 14f, 14f, glassOverlayPaint)
+        
+        if (colorId >= 10) drawGemShape(canvas, x + size * 0.15f, y + size * 0.15f, size * 0.7f, colorId)
     }
 
     private fun adjustColorLightness(color: Int, factor: Float): Int {
@@ -305,6 +311,10 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 path.moveTo(cx, y + size/4); path.cubicTo(x + size, y - size/4, x + size + size/2, cy, cx, y + size)
             }
         }
+        
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA000000.toInt(); style = Paint.Style.FILL }
+        canvas.save(); canvas.translate(5f, 6f); canvas.drawPath(path, shadowPaint); canvas.restore()
+        
         val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = RadialGradient(cx, cy, size/2f, colors, null, Shader.TileMode.CLAMP); style = Paint.Style.FILL }
         canvas.drawPath(path, starPaint); starPaint.shader = null; starPaint.color = 0xAAFFFFFF.toInt()
         canvas.drawCircle(cx - size*0.15f, cy - size*0.15f, size*0.1f, starPaint)
@@ -327,7 +337,9 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                         if (rewarded) {
                             isWaitingForAd = false; trayShapes[0] = Shape(arrayOf(intArrayOf(1))); trayShapes[1] = null; trayShapes[2] = null
                             updateTrayPositions(); invalidate()
-                        } else { isWaitingForAd = false; isGameOver = true; invalidate() }
+                        } else { 
+                            isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); invalidate() 
+                        }
                     }
                 }
                 return true
@@ -386,7 +398,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             handler.postDelayed({ soundManager.playComboVoice(total) }, 600)
             for (r in rows) for (c in 0 until 8) {
                 val colorId = grid[r][c]; val bX = boardX + c * cellSize + cellSize/2f; val bY = boardY + r * cellSize + cellSize/2f
-                for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId)))
+                for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(if(colorId>=10) colorId-9 else colorId)))
                 if (colorId >= 10) flyingGems.add(FlyingGem(bX - cellSize/2f, bY - cellSize/2f, colorId))
                 grid[r][c] = 0
             }
@@ -394,7 +406,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 val colorId = grid[r][c]
                 if (colorId != 0) { 
                     val bX = boardX + c * cellSize + cellSize/2f; val bY = boardY + r * cellSize + cellSize/2f
-                    for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId)))
+                    for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(if(colorId>=10) colorId-9 else colorId)))
                     if (colorId >= 10) flyingGems.add(FlyingGem(bX - cellSize/2f, bY - cellSize/2f, colorId))
                     grid[r][c] = 0
                 }
@@ -410,10 +422,11 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             if (canMakeMove) break
         }
         if (!canMakeMove) { 
-            soundManager.playGameOver()
-            handler.postDelayed({
-                isWaitingForAd = true; adCountdown = 5; handler.post(timerRunnable); invalidate()
-            }, 1500) 
+            // NO GAME OVER SOUND HERE, ONLY TIMER STARTS
+            isWaitingForAd = true
+            adCountdown = 5
+            handler.post(timerRunnable)
+            invalidate()
         }
     }
 
