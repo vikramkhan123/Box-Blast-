@@ -4,7 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,159 +26,100 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.android.gms.ads.MobileAds
 
 class MainActivity : ComponentActivity() {
+    private lateinit var soundManager: SoundManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        soundManager = SoundManager(this)
+        
+        MobileAds.initialize(this) {}
+        AdManager.loadRewardAd(this)
+        
         setContent {
-            MainMenuScreen()
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Original Background Image
+                Image(
+                    painter = painterResource(id = R.drawable.bg_main),
+                    contentDescription = "Background",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                // Transparent Neon Glow Effect over Image
+                GeminiNeonBackgroundOverlay()
+
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(bottom = 60.dp), 
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    PremiumButton(title = "TETRIS FALL", icon = "🧩", topColor = Color(0xFFFFDF00), bottomColor = Color(0xFFE67300), borderColor = Color(0xFFFFFF88)) {
+                        soundManager.playBtnClick()
+                        startActivity(Intent(this@MainActivity, TetrisGameActivity::class.java))
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    PremiumButton(title = "ADVENTURE", icon = "🗺️", topColor = Color(0xFF42E5FF), bottomColor = Color(0xFF0055FF), borderColor = Color(0xFF8BFFFF)) {
+                        soundManager.playBtnClick()
+                        startActivity(Intent(this@MainActivity, LevelSelectionActivity::class.java))
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    PremiumButton(title = "CLASSIC", icon = "👑", topColor = Color(0xFFB452FF), bottomColor = Color(0xFF5E17EB), borderColor = Color(0xFFE48DFF)) {
+                        soundManager.playBtnClick()
+                        startActivity(Intent(this@MainActivity, ClassicGameActivity::class.java))
+                    }
+                }
+            }
         }
+    }
+    override fun onResume() { super.onResume(); soundManager.playBGM() }
+    override fun onPause() { super.onPause(); soundManager.pauseBGM() }
+    override fun onDestroy() { super.onDestroy(); soundManager.release() }
+}
+
+@Composable
+fun GeminiNeonBackgroundOverlay() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val time by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 1000f, animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing)))
+    Canvas(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
+        val cx1 = size.width / 2f + kotlin.math.sin(time / 150f) * 350f
+        val cy1 = size.height / 3f + kotlin.math.cos(time / 120f) * 350f
+        drawRect(Brush.radialGradient(listOf(Color(0x99E94560), Color(0x00E94560)), Offset(cx1, cy1), 900f))
+        
+        val cx2 = size.width / 2f + kotlin.math.cos(time / 140f) * 400f
+        val cy2 = size.height / 1.5f + kotlin.math.sin(time / 160f) * 400f
+        drawRect(Brush.radialGradient(listOf(Color(0x990F80FF), Color(0x000F80FF)), Offset(cx2, cy2), 1000f))
     }
 }
 
 @Composable
-fun MainMenuScreen() {
-    val context = LocalContext.current
-    val soundManager = remember { SoundManager(context) }
-    
-    // BGM ko app minimize/maximize hone par control karne ke liye
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                soundManager.playBGM()
-            } else if (event == Lifecycle.Event.ON_PAUSE) {
-                soundManager.pauseBGM()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            soundManager.release()
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Image(
-            painter = painterResource(id = R.drawable.bg_main), 
-            contentDescription = "Background",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 60.dp), 
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            
-            PremiumButton(
-                title = "TETRIS FALL",
-                icon = "🧩",
-                topColor = Color(0xFFFFDF00),
-                bottomColor = Color(0xFFE67300),
-                borderColor = Color(0xFFFFFF88)
-            ) {
-                soundManager.playBtnClick()
-                context.startActivity(Intent(context, TetrisGameActivity::class.java))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            PremiumButton(
-                title = "ADVENTURE",
-                icon = "🗺️",
-                topColor = Color(0xFF42E5FF),
-                bottomColor = Color(0xFF0055FF),
-                borderColor = Color(0xFF8BFFFF)
-            ) {
-                soundManager.playBtnClick()
-                context.startActivity(Intent(context, AdventureGameActivity::class.java))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            PremiumButton(
-                title = "CLASSIC",
-                icon = "👑",
-                topColor = Color(0xFFB452FF),
-                bottomColor = Color(0xFF5E17EB),
-                borderColor = Color(0xFFE48DFF)
-            ) {
-                soundManager.playBtnClick()
-                context.startActivity(Intent(context, ClassicGameActivity::class.java))
-            }
-        }
-    }
-}
-
-@Composable
-fun PremiumButton(
-    title: String,
-    icon: String,
-    topColor: Color,
-    bottomColor: Color,
-    borderColor: Color,
-    onClick: () -> Unit
-) {
+fun PremiumButton(title: String, icon: String, topColor: Color, bottomColor: Color, borderColor: Color, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    
     val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "bounce")
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth(0.75f) 
-            .height(72.dp) 
-            .scale(scale)
+        modifier = Modifier.fillMaxWidth(0.75f).height(72.dp).scale(scale)
             .shadow(16.dp, RoundedCornerShape(36.dp), spotColor = bottomColor) 
             .clip(RoundedCornerShape(36.dp))
             .background(Brush.verticalGradient(listOf(topColor, bottomColor)))
             .border(3.dp, borderColor, RoundedCornerShape(36.dp))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(3.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0x66FFFFFF), Color(0x00FFFFFF), Color(0x33000000))
-                    ),
-                    RoundedCornerShape(33.dp)
-                )
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(3.dp).background(Brush.verticalGradient(listOf(Color(0x66FFFFFF), Color(0x00FFFFFF), Color(0x33000000))), RoundedCornerShape(33.dp)))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             Text(text = icon, fontSize = 28.sp, modifier = Modifier.padding(end = 12.dp))
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                style = TextStyle(
-                    shadow = Shadow(color = Color(0xAA000000), blurRadius = 8f, offset = Offset(2f, 4f))
-                )
-            )
+            Text(text = title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, style = TextStyle(shadow = Shadow(color = Color(0xAA000000), blurRadius = 8f, offset = Offset(2f, 4f))))
         }
     }
 }
