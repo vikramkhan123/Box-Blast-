@@ -25,12 +25,14 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private val grid = Array(8) { IntArray(8) { 0 } }
     private var currentLevel = prefs.getInt("CurrentPlayingLevel", 1)
     private var maxLevel = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
-    private var targetGems = 10 + (currentLevel * 2) 
-    private var gemsCollected = 0
-    private var isLevelComplete = false
     
+    // Multi-Gem Target System
+    private val targetGems = mutableMapOf<Int, Int>()
+    private val gemsCollected = mutableMapOf<Int, Int>()
+    
+    private var isLevelComplete = false
     private var isWaitingForAd = false
-    private var adCountdown = 10 // Timer updated to 10 Sec
+    private var adCountdown = 10
     private var isGameOver = false
 
     data class FlyingGem(var startX: Float, var startY: Float, var type: Int, var progress: Float = 0f)
@@ -53,7 +55,6 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
     private var trayY = 0f; private var trayCellSize = 0f
-    private var targetUiX = 0f; private var targetUiY = 120f
     private val centerBtnRect = RectF()
 
     val SHAPES = listOf(
@@ -84,7 +85,8 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 if (adCountdown == 0) { 
                     isWaitingForAd = false
                     isGameOver = true 
-                    soundManager.playGameOver() // GAME OVER SOUND PLAYED ONLY HERE
+                    soundManager.stopCountdownTick() // Timer stop
+                    soundManager.playGameOver() // Play game over
                 } else {
                     handler.postDelayed(this, 1000L)
                 }
@@ -102,21 +104,39 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         } catch (e: Exception) { }
     }
 
+    // 7 TYPES OF GEMS LOGIC
     private fun getAvailableGemTypes(): List<Int> {
-        val types = mutableListOf(10) 
-        if (currentLevel >= 3) types.add(11) 
-        if (currentLevel >= 6) types.add(12) 
-        if (currentLevel >= 10) types.add(13) 
-        return types
+        val available = mutableListOf(10)
+        if (currentLevel >= 5) available.add(11)
+        if (currentLevel >= 15) available.add(12)
+        if (currentLevel >= 30) available.add(13)
+        if (currentLevel >= 50) available.add(14)
+        if (currentLevel >= 100) available.add(15)
+        if (currentLevel >= 200) available.add(16)
+        
+        // Select up to 4 types based on difficulty
+        val numTypesToUse = minOf(4, 1 + (currentLevel / 15)) 
+        return available.shuffled().take(maxOf(1, numTypesToUse))
     }
 
     private fun initLevel() {
-        targetGems = 10 + (currentLevel * 2)
-        gemsCollected = 0; isGameOver = false; isLevelComplete = false; isWaitingForAd = false; adCountdown = 10
+        val totalTarget = 10 + (currentLevel * 2)
+        val gemTypes = getAvailableGemTypes()
+        val targetPerGem = totalTarget / gemTypes.size
+        
+        targetGems.clear()
+        gemsCollected.clear()
+        gemTypes.forEach { type -> 
+            targetGems[type] = targetPerGem
+            gemsCollected[type] = 0
+        }
+
+        isGameOver = false; isLevelComplete = false; isWaitingForAd = false; adCountdown = 10
         flyingGems.clear(); particles.clear()
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
+        
         var spawned = 0
-        val initialGems = minOf(targetGems, 12); val gemTypes = getAvailableGemTypes()
+        val initialGems = minOf(totalTarget, 16) 
         while(spawned < initialGems) {
             val r = Random.nextInt(8); val c = Random.nextInt(8)
             if (grid[r][c] == 0) { grid[r][c] = gemTypes.random(); spawned++ }
@@ -131,10 +151,15 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 val rawMatrix = SHAPES[Random.nextInt(SHAPES.size)]
                 val colorId = Random.nextInt(1, 6)
                 val copy = Array(rawMatrix.size) { r -> IntArray(rawMatrix[r].size) { c -> if (rawMatrix[r][c] == 1) colorId else 0 } }
-                if (gemsCollected < targetGems && Random.nextFloat() < 0.35f) {
-                    val validCoords = mutableListOf<Pair<Int, Int>>()
-                    for (r in copy.indices) for (c in copy[0].indices) if (copy[r][c] != 0) validCoords.add(Pair(r, c))
-                    if (validCoords.isNotEmpty()) { val (gr, gc) = validCoords.random(); copy[gr][gc] = getAvailableGemTypes().random() }
+                
+                if (!isLevelComplete && Random.nextFloat() < 0.4f) {
+                    // Only spawn gems that are still needed!
+                    val neededGems = targetGems.filter { (t, target) -> (gemsCollected[t] ?: 0) < target }.keys.toList()
+                    if (neededGems.isNotEmpty()) {
+                        val validCoords = mutableListOf<Pair<Int, Int>>()
+                        for (r in copy.indices) for (c in copy[0].indices) if (copy[r][c] != 0) validCoords.add(Pair(r, c))
+                        if (validCoords.isNotEmpty()) { val (gr, gc) = validCoords.random(); copy[gr][gc] = neededGems.random() }
+                    }
                 }
                 trayShapes[i] = Shape(copy)
             }
@@ -188,9 +213,20 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         super.onDraw(canvas)
         drawGeminiBackground(canvas)
 
+        // Title
         draw3DText(canvas, "LEVEL $currentLevel", width/2f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 70f)
-        drawGemShape(canvas, targetUiX - 80f, targetUiY - 40f, 60f, 10)
-        draw3DText(canvas, "$gemsCollected / $targetGems", targetUiX + 30f, targetUiY + 15f, Color.WHITE, Color.DKGRAY, 65f)
+        
+        // MULTI-TARGET UI LOGIC (Prevents Overlap)
+        val typesList = targetGems.keys.toList()
+        val spacing = 150f
+        val startX = (width / 2f) - ((typesList.size - 1) * spacing) / 2f
+        
+        typesList.forEachIndexed { index, type ->
+            val cx = startX + index * spacing
+            drawGemShape(canvas, cx - 50f, 150f, 45f, type)
+            val collected = minOf(gemsCollected[type] ?: 0, targetGems[type] ?: 0)
+            draw3DText(canvas, "$collected/${targetGems[type]}", cx + 25f, 185f, Color.WHITE, Color.DKGRAY, 45f)
+        }
 
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         canvas.drawRoundRect(rect, 24f, 24f, boardPaint)
@@ -222,12 +258,20 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             while (iterator.hasNext()) {
                 val gem = iterator.next(); gem.progress += 0.04f 
                 if (gem.progress >= 1f) {
-                    gemsCollected++
-                    if (gemsCollected >= targetGems && !isLevelComplete) { isLevelComplete = true; soundManager.playVictory() }
+                    // Update specific gem count
+                    gemsCollected[gem.type] = (gemsCollected[gem.type] ?: 0) + 1
+                    
+                    var allCompleted = true
+                    targetGems.forEach { (t, target) -> if ((gemsCollected[t] ?: 0) < target) allCompleted = false }
+                    
+                    if (allCompleted && !isLevelComplete) { isLevelComplete = true; soundManager.playVictory() }
                     soundManager.playPick(); iterator.remove()
                 } else {
-                    val currentX = gem.startX + (targetUiX - 80f - gem.startX) * gem.progress
-                    val currentY = gem.startY + (targetUiY - 40f - gem.startY) * gem.progress
+                    // Fly towards its specific UI target icon
+                    val tIndex = typesList.indexOf(gem.type)
+                    val tX = startX + tIndex * spacing - 50f
+                    val currentX = gem.startX + (tX - gem.startX) * gem.progress
+                    val currentY = gem.startY + (150f - gem.startY) * gem.progress
                     drawGemShape(canvas, currentX, currentY, cellSize * 0.8f * (1f - gem.progress * 0.3f), gem.type)
                 }
             }
@@ -256,7 +300,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         var firstColorId = 0
         for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
-        var neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
+        var neonColor = getBaseColor(if (firstColorId >= 10) firstColorId - 9 else firstColorId)
         if (firstColorId >= 10) neonColor = Color.YELLOW 
         neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
@@ -284,7 +328,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         val cx = x + size / 2f; val cy = y + size / 2f; val path = Path()
         var colors = intArrayOf(0xFFFFFFA0.toInt(), 0xFFFFD700.toInt(), 0xFFE65C00.toInt())
         when(type) {
-            10 -> {
+            10 -> { // Star
                 val outR = size / 2f; val inR = outR / 2.2f
                 for (i in 0 until 10) {
                     val angle = i * (Math.PI / 5) - (Math.PI / 2); val r = if (i % 2 == 0) outR else inR
@@ -292,11 +336,11 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 }
                 path.close()
             }
-            11 -> {
+            11 -> { // Diamond
                 colors = intArrayOf(0xFFD4F1F9.toInt(), 0xFF00E5FF.toInt(), 0xFF0055FF.toInt())
                 path.moveTo(cx, y); path.lineTo(x + size, cy); path.lineTo(cx, y + size); path.lineTo(x, cy); path.close()
             }
-            12 -> {
+            12 -> { // Hexagon
                 colors = intArrayOf(0xFFF9D4F1.toInt(), 0xFFFF00FF.toInt(), 0xFF8B008B.toInt())
                 for (i in 0 until 6) {
                     val angle = i * (Math.PI / 3); val px = cx + cos(angle).toFloat() * (size/2f); val py = cy + sin(angle).toFloat() * (size/2f)
@@ -304,10 +348,31 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 }
                 path.close()
             }
-            13 -> {
+            13 -> { // Heart
                 colors = intArrayOf(0xFFFFB6C1.toInt(), 0xFFFF0040.toInt(), 0xFF8B0000.toInt())
                 path.moveTo(cx, y + size/4); path.cubicTo(x, y - size/4, x - size/2, cy, cx, y + size)
                 path.moveTo(cx, y + size/4); path.cubicTo(x + size, y - size/4, x + size + size/2, cy, cx, y + size)
+            }
+            14 -> { // Triangle
+                colors = intArrayOf(0xFFD4F9D4.toInt(), 0xFF00FF00.toInt(), 0xFF008000.toInt())
+                path.moveTo(cx, y + size * 0.1f)
+                path.lineTo(x + size * 0.9f, y + size * 0.9f)
+                path.lineTo(x + size * 0.1f, y + size * 0.9f)
+                path.close()
+            }
+            15 -> { // Pentagon
+                colors = intArrayOf(0xFFFFE4B5.toInt(), 0xFFFFA500.toInt(), 0xFFFF4500.toInt())
+                for (i in 0 until 5) {
+                    val angle = i * (Math.PI * 2 / 5) - (Math.PI / 2)
+                    val px = cx + cos(angle).toFloat() * (size / 2f)
+                    val py = cy + sin(angle).toFloat() * (size / 2f)
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close()
+            }
+            16 -> { // Circle
+                colors = intArrayOf(0xFFFFFFFF.toInt(), 0xFFC0C0C0.toInt(), 0xFF808080.toInt())
+                path.addCircle(cx, cy, size / 2.2f, Path.Direction.CW)
             }
         }
         
@@ -319,7 +384,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         canvas.drawCircle(cx - size*0.15f, cy - size*0.15f, size*0.1f, starPaint)
     }
 
-    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); else -> 0xFFFFFFFF.toInt() }
+    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); 6 -> 0xFF00FF00.toInt(); 7 -> 0xFFFFA500.toInt(); else -> 0xFFFFFFFF.toInt() }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val tx = event.x; val ty = event.y
@@ -330,7 +395,9 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 initLevel(); return true
             }
             if (isWaitingForAd && centerBtnRect.contains(tx, ty)) {
-                soundManager.playBtnClick(); handler.removeCallbacks(timerRunnable)
+                soundManager.playBtnClick()
+                soundManager.stopCountdownTick() // Timer stop
+                handler.removeCallbacks(timerRunnable)
                 (context as android.app.Activity).let { activity ->
                     AdManager.showRewardAd(activity) { rewarded ->
                         if (rewarded) {
@@ -421,7 +488,6 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             if (canMakeMove) break
         }
         if (!canMakeMove) { 
-            // ONLY START TIMER - NO GAME OVER MUSIC
             isWaitingForAd = true
             adCountdown = 10
             handler.post(timerRunnable)
