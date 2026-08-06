@@ -13,7 +13,7 @@ class TetrisGameView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private val soundManager = SoundManager(context)
+    val soundManager = SoundManager(context)
     private val COLS = 10
     private val ROWS = 20
     private val grid = Array(ROWS) { IntArray(COLS) { 0 } }
@@ -92,7 +92,6 @@ class TetrisGameView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        // Board aur chhota kiya, padding badha kar
         val padding = w * 0.2f 
         boardSizeW = w - padding * 2
         cellSize = boardSizeW / COLS
@@ -101,15 +100,12 @@ class TetrisGameView @JvmOverloads constructor(
         boardX = padding
         boardY = 160f
 
-        // One-Hand Joystick Layout (Center me)
         val controlCenterY = boardY + boardSizeH + 200f
         val controlCenterX = w / 2f
         val btnSize = 140f
         val gap = 20f
         
-        // Beech me Rotate
         btnRotate.set(controlCenterX - btnSize/2, controlCenterY - btnSize - gap, controlCenterX + btnSize/2, controlCenterY - gap)
-        // Uske neeche line me: Left - Down - Right
         btnLeft.set(controlCenterX - btnSize - btnSize/2 - gap, controlCenterY, controlCenterX - btnSize/2 - gap, controlCenterY + btnSize)
         btnDown.set(controlCenterX - btnSize/2, controlCenterY, controlCenterX + btnSize/2, controlCenterY + btnSize)
         btnRight.set(controlCenterX + btnSize/2 + gap, controlCenterY, controlCenterX + btnSize + btnSize/2 + gap, controlCenterY + btnSize)
@@ -130,7 +126,6 @@ class TetrisGameView @JvmOverloads constructor(
         bgPaint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), 0xFF0B1021.toInt(), 0xFF060913.toInt(), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        // Top UI & Next Shape preview
         canvas.drawText("SCORE: $score", boardX - 30f, 100f, textPaint)
         
         val nextTitleX = boardX + boardSizeW - 50f
@@ -175,7 +170,6 @@ class TetrisGameView @JvmOverloads constructor(
             }
         }
 
-        // Draw D-Pad Controls
         drawControlButton(canvas, btnLeft, "◀")
         drawControlButton(canvas, btnRotate, "↻")
         drawControlButton(canvas, btnDown, "▼")
@@ -188,7 +182,6 @@ class TetrisGameView @JvmOverloads constructor(
     }
 
     private fun drawControlButton(canvas: Canvas, rect: RectF, icon: String) {
-        // Drop shadow for buttons
         val shadow = RectF(rect).apply { offset(0f, 8f) }
         canvas.drawRoundRect(shadow, 30f, 30f, Paint().apply { color = 0xAA000000.toInt() })
         
@@ -238,8 +231,8 @@ class TetrisGameView @JvmOverloads constructor(
         val ty = event.y
 
         when {
-            btnLeft.contains(tx, ty) -> moveLeft()
-            btnRight.contains(tx, ty) -> moveRight()
+            btnLeft.contains(tx, ty) -> { soundManager.playBtnClick(); moveLeft() }
+            btnRight.contains(tx, ty) -> { soundManager.playBtnClick(); moveRight() }
             btnRotate.contains(tx, ty) -> rotatePiece()
             btnDown.contains(tx, ty) -> {
                 soundManager.playPick()
@@ -313,6 +306,7 @@ class TetrisGameView @JvmOverloads constructor(
         }
         if (linesCleared > 0) {
             soundManager.playClear()
+            soundManager.playComboVoice(linesCleared)
             score += (linesCleared * 100) * linesCleared
             speedMs = maxOf(150L, speedMs - 10L)
         }
