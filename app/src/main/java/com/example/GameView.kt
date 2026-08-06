@@ -16,14 +16,17 @@ import kotlin.random.Random
 class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
 
     val soundManager = SoundManager(context)
+    private val prefs = context.getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     private val handler = Handler(Looper.getMainLooper())
     private val grid = Array(8) { IntArray(8) { 0 } }
     
     private var score = 0
+    private var highScore = prefs.getInt("ClassicHighScore", 0) // HIGH SCORE
+    
     private var isGameOver = false
     private var isWaitingForAd = false
-    private var adCountdown = 10 // Timer 10 sec
+    private var adCountdown = 10 
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
@@ -72,6 +75,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 if (adCountdown == 0) {
                     isWaitingForAd = false
                     isGameOver = true
+                    soundManager.stopCountdownTick() // Timer stop
                     soundManager.playGameOver() // PLAY GAME OVER HERE
                 } else {
                     handler.postDelayed(this, 1000L)
@@ -163,8 +167,12 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         super.onDraw(canvas)
         drawGeminiBackground(canvas)
         
-        draw3DText(canvas, "SCORE", width / 2f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 70f)
-        draw3DText(canvas, "$score", width / 2f, 180f, Color.WHITE, Color.DKGRAY, 100f)
+        // High Score UI
+        draw3DText(canvas, "SCORE", width / 4f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 60f)
+        draw3DText(canvas, "$score", width / 4f, 160f, Color.WHITE, Color.DKGRAY, 80f)
+        
+        draw3DText(canvas, "BEST", (width / 4f) * 3f, 100f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 60f)
+        draw3DText(canvas, "$highScore", (width / 4f) * 3f, 160f, Color.WHITE, Color.DKGRAY, 80f)
 
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         canvas.drawRoundRect(rect, 24f, 24f, boardPaint)
@@ -236,7 +244,9 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
         if (event.action == MotionEvent.ACTION_DOWN) {
             if (isWaitingForAd && centerBtnRect.contains(tx, ty)) {
-                soundManager.playBtnClick(); handler.removeCallbacks(timerRunnable)
+                soundManager.playBtnClick()
+                soundManager.stopCountdownTick() // Timer stop
+                handler.removeCallbacks(timerRunnable)
                 (context as android.app.Activity).let { activity ->
                     AdManager.showRewardAd(activity) { rewarded ->
                         if (rewarded) {
@@ -305,6 +315,12 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             
             for (r in rows) { for (c in 0 until 8) { val colorId = grid[r][c]; val bX = boardX + c * cellSize + cellSize/2f; val bY = boardY + r * cellSize + cellSize/2f; for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId))); grid[r][c] = 0 }; score += 100 }
             for (c in cols) { for (r in 0 until 8) { val colorId = grid[r][c]; if (colorId != 0) { val bX = boardX + c * cellSize + cellSize/2f; val bY = boardY + r * cellSize + cellSize/2f; for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId))); grid[r][c] = 0 } }; score += 100 }
+            
+            // Check High Score
+            if (score > highScore) {
+                highScore = score
+                prefs.edit().putInt("ClassicHighScore", highScore).apply()
+            }
         }
     }
 
@@ -315,7 +331,6 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             if (canMakeMove) break
         }
         if (!canMakeMove) { 
-            // ONLY START TIMER - NO GAME OVER MUSIC
             isWaitingForAd = true
             adCountdown = 10
             handler.post(timerRunnable)
