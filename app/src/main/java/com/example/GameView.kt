@@ -23,7 +23,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private var score = 0
     private var isGameOver = false
     private var isWaitingForAd = false
-    private var adCountdown = 5
+    private var adCountdown = 10 // Timer 10 sec
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
@@ -67,11 +67,12 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
-                soundManager.playCountdownTick() // ONLY TICK TICK
+                soundManager.playCountdownTick()
                 adCountdown--
                 if (adCountdown == 0) {
-                    isWaitingForAd = false; isGameOver = true
-                    soundManager.playGameOver() // Play game over when timer hits 0
+                    isWaitingForAd = false
+                    isGameOver = true
+                    soundManager.playGameOver() // PLAY GAME OVER HERE
                 } else {
                     handler.postDelayed(this, 1000L)
                 }
@@ -91,7 +92,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private fun restartGame() {
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
-        score = 0; isGameOver = false; isWaitingForAd = false; adCountdown = 5
+        score = 0; isGameOver = false; isWaitingForAd = false; adCountdown = 10
         particles.clear()
         for (i in 0 until 3) trayShapes[i] = null
         fillTray()
@@ -314,9 +315,9 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             if (canMakeMove) break
         }
         if (!canMakeMove) { 
-            // NO GAME OVER SOUND HERE, ONLY TIMER STARTS
+            // ONLY START TIMER - NO GAME OVER MUSIC
             isWaitingForAd = true
-            adCountdown = 5
+            adCountdown = 10
             handler.post(timerRunnable)
             invalidate()
         }
