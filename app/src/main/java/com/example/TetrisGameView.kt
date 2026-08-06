@@ -22,7 +22,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val grid = Array(ROWS) { IntArray(COLS) { 0 } }
     
     private var score = 0; private var speedMs = 600L
-    private var isGameOver = false; private var isWaitingForAd = false; private var adCountdown = 5
+    private var isGameOver = false; private var isWaitingForAd = false; private var adCountdown = 10 // Timer 10 Sec
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
@@ -62,11 +62,11 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
-                soundManager.playCountdownTick() // ONLY TICK TICK
+                soundManager.playCountdownTick()
                 adCountdown--
                 if (adCountdown == 0) { 
                     isWaitingForAd = false; isGameOver = true
-                    soundManager.playGameOver() // Play game over when timer hits 0
+                    soundManager.playGameOver() // PLAY GAME OVER HERE
                 } else {
                     handler.postDelayed(this, 1000L)
                 }
@@ -92,8 +92,8 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private fun spawnPiece() {
         currentPiece = nextPiece; nextPiece = generatePiece()
         if (!isValidPosition(currentPiece!!.matrix, currentPiece!!.x, currentPiece!!.y)) {
-            // NO GAME OVER SOUND HERE, ONLY TIMER STARTS
-            isWaitingForAd = true; adCountdown = 5; handler.post(timerRunnable); invalidate()
+            // ONLY TIMER STARTS
+            isWaitingForAd = true; adCountdown = 10; handler.post(timerRunnable); invalidate()
         }
     }
 
