@@ -1,26 +1,35 @@
 package com.example
 
 import android.os.Bundle
+import android.widget.LinearLayout
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
 
 class TetrisGameActivity : ComponentActivity() {
     private lateinit var gameView: TetrisGameView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+
         gameView = TetrisGameView(this)
-        setContentView(gameView)
+        val gameParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        layout.addView(gameView, gameParams)
+
+        // Banner Ad
+        val adView = AdView(this)
+        adView.setAdSize(AdSize.BANNER)
+        adView.adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test Banner ID
+        adView.loadAd(AdRequest.Builder().build())
+        layout.addView(adView)
+
+        setContentView(layout)
     }
 
-    override fun onResume() {
-        super.onResume()
-        gameView.soundManager.playBGM()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        gameView.soundManager.pauseBGM()
-    }
+    override fun onResume() { super.onResume(); gameView.soundManager.playBGM() }
+    override fun onPause() { super.onPause(); gameView.soundManager.pauseBGM() }
 }
