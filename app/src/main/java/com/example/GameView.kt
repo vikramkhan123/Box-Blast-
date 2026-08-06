@@ -12,7 +12,7 @@ class GameView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private val soundManager = SoundManager(context)
+    val soundManager = SoundManager(context)
     private val grid = Array(8) { IntArray(8) { 0 } }
     
     private var score = 0
@@ -102,7 +102,6 @@ class GameView @JvmOverloads constructor(
         val bw = 400f
         val bh = 120f
         restartBtnRect.set(w/2f - bw/2f, boardY + boardSize/2f + 100f, w/2f + bw/2f, boardY + boardSize/2f + 100f + bh)
-        
         updateTrayPositions()
     }
 
@@ -125,7 +124,6 @@ class GameView @JvmOverloads constructor(
         bgPaint.color = 0xFF2A3A6A.toInt()
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-        // Classic Score UI
         canvas.drawText("SCORE: $score", width / 2f - textPaint.measureText("SCORE: $score") / 2f, 150f, textPaint)
 
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
@@ -145,7 +143,6 @@ class GameView @JvmOverloads constructor(
             }
         }
 
-        // Transparent Clean Shadow Preview
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 drawShape(canvas, shape, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize, alpha = 90)
@@ -245,6 +242,7 @@ class GameView @JvmOverloads constructor(
 
         if (event.action == MotionEvent.ACTION_DOWN) {
             if (isGameOver && restartBtnRect.contains(tx, ty)) {
+                soundManager.playBtnClick()
                 restartGame()
                 return true
             }
@@ -343,8 +341,11 @@ class GameView @JvmOverloads constructor(
         for (r in 0 until 8) { if ((0 until 8).all { c -> grid[r][c] != 0 }) rowsToClear.add(r) }
         for (c in 0 until 8) { if ((0 until 8).all { r -> grid[r][c] != 0 }) colsToClear.add(c) }
 
-        if (rowsToClear.isNotEmpty() || colsToClear.isNotEmpty()) {
+        val totalLines = rowsToClear.size + colsToClear.size
+
+        if (totalLines > 0) {
             soundManager.playClear()
+            soundManager.playComboVoice(totalLines)
             
             for (r in rowsToClear) {
                 for (c in 0 until 8) {
