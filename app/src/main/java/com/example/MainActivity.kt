@@ -31,6 +31,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,9 +47,26 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainMenuScreen() {
     val context = LocalContext.current
+    val soundManager = remember { SoundManager(context) }
+    
+    // BGM ko app minimize/maximize hone par control karne ke liye
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                soundManager.playBGM()
+            } else if (event == Lifecycle.Event.ON_PAUSE) {
+                soundManager.pauseBGM()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            soundManager.release()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Premium Background Image
         Image(
             painter = painterResource(id = R.drawable.bg_main), 
             contentDescription = "Background",
@@ -54,7 +74,6 @@ fun MainMenuScreen() {
             modifier = Modifier.fillMaxSize()
         )
 
-        // Buttons positioned at the bottom
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -63,7 +82,6 @@ fun MainMenuScreen() {
             verticalArrangement = Arrangement.Bottom
         ) {
             
-            // TETRIS Mode Button
             PremiumButton(
                 title = "TETRIS FALL",
                 icon = "🧩",
@@ -71,13 +89,12 @@ fun MainMenuScreen() {
                 bottomColor = Color(0xFFE67300),
                 borderColor = Color(0xFFFFFF88)
             ) {
-                // TETRIS MODE LINKED HERE
+                soundManager.playBtnClick()
                 context.startActivity(Intent(context, TetrisGameActivity::class.java))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ADVENTURE Mode Button
             PremiumButton(
                 title = "ADVENTURE",
                 icon = "🗺️",
@@ -85,12 +102,12 @@ fun MainMenuScreen() {
                 bottomColor = Color(0xFF0055FF),
                 borderColor = Color(0xFF8BFFFF)
             ) {
+                soundManager.playBtnClick()
                 context.startActivity(Intent(context, AdventureGameActivity::class.java))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // CLASSIC Mode Button
             PremiumButton(
                 title = "CLASSIC",
                 icon = "👑",
@@ -98,6 +115,7 @@ fun MainMenuScreen() {
                 bottomColor = Color(0xFF5E17EB),
                 borderColor = Color(0xFFE48DFF)
             ) {
+                soundManager.playBtnClick()
                 context.startActivity(Intent(context, ClassicGameActivity::class.java))
             }
         }
@@ -150,22 +168,14 @@ fun PremiumButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = icon,
-                fontSize = 28.sp,
-                modifier = Modifier.padding(end = 12.dp)
-            )
+            Text(text = icon, fontSize = 28.sp, modifier = Modifier.padding(end = 12.dp))
             Text(
                 text = title,
                 color = Color.White,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 style = TextStyle(
-                    shadow = Shadow(
-                        color = Color(0xAA000000), 
-                        blurRadius = 8f, 
-                        offset = Offset(2f, 4f)
-                    )
+                    shadow = Shadow(color = Color(0xAA000000), blurRadius = 8f, offset = Offset(2f, 4f))
                 )
             )
         }
