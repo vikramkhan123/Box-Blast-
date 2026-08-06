@@ -64,6 +64,18 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     init { restartGame(); handler.post(renderLoop) }
 
+    // MISSING FUNCTION ADDED HERE
+    private fun vibratePhone(duration: Long = 50L) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(duration)
+            }
+        } catch (e: Exception) { }
+    }
+
     private fun restartGame() {
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
         score = 0; isGameOver = false; particles.clear()
@@ -82,14 +94,12 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             }
         }
         
-        // GUARANTEED FIT LOGIC: Ensure at least one generated shape fits!
         for (shape in trayShapes) {
             if (shape != null && !shape.placed) {
                 for(r in 0 until 8) for(c in 0 until 8) if(canPlaceShape(shape, r, c)) { anyCanFit = true; break }
             }
         }
         
-        // If none fit, forcefully give a 1x1 block so player can survive!
         if(!anyCanFit) trayShapes[0] = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
 
         if (width > 0 && height > 0) updateTrayPositions()
