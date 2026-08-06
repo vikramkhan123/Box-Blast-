@@ -2,44 +2,44 @@ package com.example
 
 import android.content.Context
 import android.graphics.*
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-class GameView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
-) : View(context, attrs, defStyleAttr) {
+class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
 
     val soundManager = SoundManager(context)
+    private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    private val handler = Handler(Looper.getMainLooper())
     private val grid = Array(8) { IntArray(8) { 0 } }
     
     private var score = 0
     private var isGameOver = false
 
-    data class BlastParticle(var cx: Float, var cy: Float, var radius: Float, var alpha: Int, val color: Int)
-    private val blasts = mutableListOf<BlastParticle>()
+    data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
+    private val particles = mutableListOf<Particle>()
 
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1B264A.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF354B8B.toInt(); style = Paint.Style.STROKE; strokeWidth = 12f }
+    private val neonBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(15f, 0f, 0f, 0xFF42E5FF.toInt()) }
     
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val blockLightEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55FFFFFF; style = Paint.Style.FILL }
-    private val blockDarkEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55000000; style = Paint.Style.FILL }
+    private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 6f }
+    
+    private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 90f; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
+    private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 60f; typeface = Typeface.DEFAULT_BOLD; setShadowLayer(10f, 0f, 0f, Color.BLACK) }
-    private val overlayTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF5E62.toInt(); textSize = 90f; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER; setShadowLayer(15f, 0f, 10f, Color.BLACK) }
-    private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2CD04E.toInt(); style = Paint.Style.FILL }
-
-    private var cellSize = 0f
-    private var boardSize = 0f
-    private var boardX = 0f
-    private var boardY = 0f
-    private var trayY = 0f
-    private var trayCellSize = 0f
-
+    private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
+    private var trayY = 0f; private var trayCellSize = 0f
     private val restartBtnRect = RectF()
 
     val SHAPES = listOf(
@@ -56,27 +56,23 @@ class GameView @JvmOverloads constructor(
     }
 
     private val trayShapes = arrayOfNulls<Shape>(3)
-    private var draggingShapeIndex = -1
-    private var draggingShape: Shape? = null
-    private var dragTouchOffsetX = 0f
-    private var dragTouchOffsetY = 0f
+    private var draggingShapeIndex = -1; private var draggingShape: Shape? = null
+    private var dragTouchOffsetX = 0f; private var dragTouchOffsetY = 0f
     private var hoverRow = -1; private var hoverCol = -1; private var canFitHover = false
 
-    init {
-        restartGame()
-    }
+    private val renderLoop = object : Runnable { override fun run() { invalidate(); handler.postDelayed(this, 16L) } }
+
+    init { restartGame(); handler.post(renderLoop) }
 
     private fun restartGame() {
-        for (r in 0 until 8) { for (c in 0 until 8) grid[r][c] = 0 }
-        score = 0
-        isGameOver = false
-        blasts.clear()
+        for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
+        score = 0; isGameOver = false; particles.clear()
         for (i in 0 until 3) trayShapes[i] = null
         fillTray()
-        invalidate()
     }
 
     private fun fillTray() {
+        var anyCanFit = false
         for (i in 0 until 3) {
             if (trayShapes[i] == null || trayShapes[i]!!.placed) {
                 val rawMatrix = SHAPES[Random.nextInt(SHAPES.size)]
@@ -85,6 +81,17 @@ class GameView @JvmOverloads constructor(
                 trayShapes[i] = Shape(copy)
             }
         }
+        
+        // GUARANTEED FIT LOGIC: Ensure at least one generated shape fits!
+        for (shape in trayShapes) {
+            if (shape != null && !shape.placed) {
+                for(r in 0 until 8) for(c in 0 until 8) if(canPlaceShape(shape, r, c)) { anyCanFit = true; break }
+            }
+        }
+        
+        // If none fit, forcefully give a 1x1 block so player can survive!
+        if(!anyCanFit) trayShapes[0] = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
+
         if (width > 0 && height > 0) updateTrayPositions()
         checkGameOver()
     }
@@ -92,302 +99,174 @@ class GameView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val padding = 30f 
-        boardSize = w - padding * 2
-        cellSize = boardSize / 8
-        boardX = padding
-        boardY = padding + 220f
-        trayY = boardY + boardSize + 100f
-        trayCellSize = cellSize * 0.65f
-        
-        val bw = 400f
-        val bh = 120f
-        restartBtnRect.set(w/2f - bw/2f, boardY + boardSize/2f + 100f, w/2f + bw/2f, boardY + boardSize/2f + 100f + bh)
+        boardSize = w - padding * 2; cellSize = boardSize / 8; boardX = padding; boardY = padding + 250f
+        trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f
+        restartBtnRect.set(w/2f - 300f, boardY + boardSize/2f + 80f, w/2f + 300f, boardY + boardSize/2f + 220f)
         updateTrayPositions()
     }
 
     private fun updateTrayPositions() {
         if (width == 0) return
         val sectionWidth = width / 3f
-        for (i in 0 until 3) {
-            val shape = trayShapes[i]
-            if (shape != null && !shape.placed) {
-                val shapeWidth = shape.cols * trayCellSize
-                val shapeHeight = shape.rows * trayCellSize
-                shape.cx = (i * sectionWidth) + (sectionWidth - shapeWidth) / 2f
-                shape.cy = trayY + (sectionWidth - shapeHeight) / 2f
-            }
-        }
+        for (i in 0 until 3) trayShapes[i]?.let { if (!it.placed) { it.cx = (i * sectionWidth) + (sectionWidth - (it.cols * trayCellSize)) / 2f; it.cy = trayY + (sectionWidth - (it.rows * trayCellSize)) / 2f } }
+    }
+
+    private fun drawGeminiBackground(canvas: Canvas) {
+        canvas.drawColor(0xFF0F172A.toInt()) 
+        val time = System.currentTimeMillis()
+        neonBgPaint.shader = RadialGradient(width / 2f + Math.sin(time / 2000.0).toFloat() * 250f, height / 3f + Math.cos(time / 1500.0).toFloat() * 250f, 800f, intArrayOf(0x66E94560, 0x00E94560), null, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), neonBgPaint)
+        neonBgPaint.shader = RadialGradient(width / 2f + Math.cos(time / 1800.0).toFloat() * 300f, height / 1.5f + Math.sin(time / 2200.0).toFloat() * 300f, 900f, intArrayOf(0x660F80FF, 0x000F80FF), null, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), neonBgPaint)
+    }
+
+    private fun draw3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float) {
+        text3DPaint.textSize = size; text3DPaint.color = depthColor
+        for (i in 1..6) canvas.drawText(text, x, y + i * 2, text3DPaint)
+        text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        bgPaint.color = 0xFF2A3A6A.toInt()
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
-
-        canvas.drawText("SCORE: $score", width / 2f - textPaint.measureText("SCORE: $score") / 2f, 150f, textPaint)
+        drawGeminiBackground(canvas)
+        
+        draw3DText(canvas, "SCORE", width / 2f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 70f)
+        draw3DText(canvas, "$score", width / 2f, 180f, Color.WHITE, Color.DKGRAY, 100f)
 
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
-        canvas.drawRoundRect(rect, 16f, 16f, boardPaint)
-        canvas.drawRoundRect(rect, 16f, 16f, boardBorderPaint)
+        canvas.drawRoundRect(rect, 24f, 24f, boardPaint)
+        canvas.drawRoundRect(rect, 24f, 24f, boardBorderPaint)
 
-        val emptyPaint = Paint().apply { color = 0x1AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 3f }
-
-        for (r in 0 until 8) {
-            for (c in 0 until 8) {
-                val cx = boardX + c * cellSize
-                val cy = boardY + r * cellSize
-                val cellId = grid[r][c]
-                val cellRect = RectF(cx + 2, cy + 2, cx + cellSize - 2, cy + cellSize - 2)
-                canvas.drawRoundRect(cellRect, 8f, 8f, emptyPaint)
-                if (cellId != 0) draw3DBlock(canvas, cx, cy, cellSize, cellId, alpha = 255)
-            }
+        val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
+        for (r in 0 until 8) for (c in 0 until 8) {
+            val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
+            canvas.drawRoundRect(RectF(cx + 4, cy + 4, cx + cellSize - 4, cy + cellSize - 4), 12f, 12f, emptyPaint)
+            if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
         }
 
-        draggingShape?.let { shape ->
-            if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
-                drawShape(canvas, shape, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize, alpha = 90)
-            }
-        }
+        draggingShape?.let { if (canFitHover) drawNeonShadow(canvas, it, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize) }
+        for (i in 0 until 3) if (i != draggingShapeIndex) trayShapes[i]?.let { if (!it.placed) drawShape(canvas, it, it.cx, it.cy, trayCellSize) }
+        draggingShape?.let { drawShape(canvas, it, it.cx, it.cy, cellSize) }
 
-        for (i in 0 until 3) {
-            if (i == draggingShapeIndex) continue
-            val shape = trayShapes[i]
-            if (shape != null && !shape.placed) drawShape(canvas, shape, shape.cx, shape.cy, trayCellSize, alpha = 255)
-        }
-
-        draggingShape?.let { shape -> drawShape(canvas, shape, shape.cx, shape.cy, cellSize, alpha = 255) }
-
-        if (blasts.isNotEmpty()) {
-            val iterator = blasts.iterator()
-            val blastPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-            var animatingBlasts = false
+        if (particles.isNotEmpty()) {
+            val iterator = particles.iterator(); val pPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
             while (iterator.hasNext()) {
-                val p = iterator.next()
-                blastPaint.color = p.color
-                blastPaint.alpha = p.alpha
-                canvas.drawCircle(p.cx, p.cy, p.radius, blastPaint)
-                
-                p.radius += 8f
-                p.alpha -= 15
-                if (p.alpha <= 0) iterator.remove() else animatingBlasts = true
+                val p = iterator.next(); pPaint.color = p.color; pPaint.alpha = (p.life * 255).toInt().coerceIn(0, 255)
+                canvas.drawCircle(p.x, p.y, cellSize * 0.15f * p.life, pPaint)
+                p.x += p.vx; p.y += p.vy; p.vy += 1.5f; p.life -= 0.03f
+                if (p.life <= 0) iterator.remove()
             }
-            if (animatingBlasts) invalidate()
         }
 
         if (isGameOver) {
-            overlayTextPaint.color = 0xFFFF5E62.toInt()
             canvas.drawColor(0xDD000000.toInt())
-            canvas.drawText("GAME OVER!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
+            draw3DText(canvas, "GAME OVER", width / 2f, boardY + boardSize / 2f - 40f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
             
+            btnPaint.color = 0xFF8B0000.toInt()
+            canvas.drawRoundRect(RectF(restartBtnRect.left, restartBtnRect.top + 15f, restartBtnRect.right, restartBtnRect.bottom + 15f), 30f, 30f, btnPaint)
             btnPaint.color = 0xFFFF5E62.toInt()
             canvas.drawRoundRect(restartBtnRect, 30f, 30f, btnPaint)
-            val btnTextPaint = Paint(textPaint).apply { textSize = 50f; textAlign = Paint.Align.CENTER }
-            canvas.drawText("RESTART", restartBtnRect.centerX(), restartBtnRect.centerY() + 15f, btnTextPaint)
+            text3DPaint.textSize = 45f; text3DPaint.color = Color.WHITE
+            canvas.drawText("RESTART", restartBtnRect.centerX(), restartBtnRect.centerY() + 15f, text3DPaint)
         }
     }
 
-    private fun drawShape(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float, alpha: Int) {
-        for (r in 0 until shape.rows) {
-            for (c in 0 until shape.cols) {
-                if (shape.matrix[r][c] != 0) {
-                    draw3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c], alpha)
-                }
-            }
-        }
+    private fun drawShape(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) drawGlassy3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c])
     }
 
-    private fun draw3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int, alpha: Int) {
-        val p = 1.5f
-        val rect = RectF(x + p, y + p, x + size - p, y + size - p)
-        
-        blockBasePaint.color = getBaseColor(colorId)
-        blockBasePaint.alpha = alpha
-        blockLightEdgePaint.alpha = if (alpha < 255) 0 else 85
-        blockDarkEdgePaint.alpha = if (alpha < 255) 0 else 85
-        
-        canvas.drawRoundRect(rect, 12f, 12f, blockBasePaint)
-
-        if (alpha == 255) {
-            val bevelSize = size * 0.15f
-            val lightPath = Path().apply {
-                moveTo(rect.left, rect.top); lineTo(rect.right, rect.top)
-                lineTo(rect.right - bevelSize, rect.top + bevelSize); lineTo(rect.left + bevelSize, rect.top + bevelSize)
-                lineTo(rect.left + bevelSize, rect.bottom - bevelSize); lineTo(rect.left, rect.bottom); close()
-            }
-            canvas.drawPath(lightPath, blockLightEdgePaint)
-
-            val darkPath = Path().apply {
-                moveTo(rect.right, rect.bottom); lineTo(rect.left, rect.bottom)
-                lineTo(rect.left + bevelSize, rect.bottom - bevelSize); lineTo(rect.right - bevelSize, rect.bottom - bevelSize)
-                lineTo(rect.right - bevelSize, rect.top + bevelSize); lineTo(rect.right, rect.top); close()
-            }
-            canvas.drawPath(darkPath, blockDarkEdgePaint)
-        }
+    private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
+        var firstColorId = 0
+        for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
+        val neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
+        neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
     }
 
-    private fun getBaseColor(id: Int): Int {
-        return when (id) {
-            1 -> 0xFFD82835.toInt()
-            2 -> 0xFF35A3FF.toInt()
-            3 -> 0xFF5DD932.toInt()
-            4 -> 0xFFFFC20A.toInt()
-            5 -> 0xFF9E42F5.toInt()
-            else -> 0xFFFFFFFF.toInt()
-        }
+    private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
+        val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
+        val baseColor = getBaseColor(colorId)
+        val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, intArrayOf(adjustColorLightness(baseColor, 1.4f), baseColor, adjustColorLightness(baseColor, 0.6f)), null, Shader.TileMode.CLAMP)
+        blockBasePaint.shader = grad; canvas.drawRoundRect(rect, 16f, 16f, blockBasePaint); blockBasePaint.shader = null 
+        val overlayRect = RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.top + size * 0.4f)
+        val shineGrad = LinearGradient(overlayRect.left, overlayRect.top, overlayRect.left, overlayRect.bottom, 0x88FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
+        glassOverlayPaint.shader = shineGrad; canvas.drawRoundRect(overlayRect, 14f, 14f, glassOverlayPaint)
     }
+
+    private fun adjustColorLightness(color: Int, factor: Float): Int {
+        val hsv = FloatArray(3); Color.colorToHSV(color, hsv); hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f); return Color.HSVToColor(hsv)
+    }
+
+    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); else -> 0xFFFFFFFF.toInt() }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val tx = event.x
-        val ty = event.y
-
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            if (isGameOver && restartBtnRect.contains(tx, ty)) {
-                soundManager.playBtnClick()
-                restartGame()
-                return true
-            }
-        }
-
+        val tx = event.x; val ty = event.y
+        if (event.action == MotionEvent.ACTION_DOWN && isGameOver && restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
         if (isGameOver) return true
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                for (i in 0 until 3) {
-                    val shape = trayShapes[i]
-                    if (shape != null && !shape.placed) {
-                        val hitRect = RectF(shape.cx - 30f, shape.cy - 30f, shape.cx + (shape.cols * trayCellSize) + 30f, shape.cy + (shape.rows * trayCellSize) + 30f)
-                        if (hitRect.contains(tx, ty)) {
-                            soundManager.playPick()
-                            draggingShapeIndex = i
-                            draggingShape = shape
-                            shape.cx = tx - (shape.cols * cellSize) / 2f
-                            shape.cy = ty - (shape.rows * cellSize) - 180f
-                            dragTouchOffsetX = tx - shape.cx
-                            dragTouchOffsetY = ty - shape.cy
-                            invalidate()
-                            return true
-                        }
-                    }
-                }
+                for (i in 0 until 3) trayShapes[i]?.let { if (!it.placed && RectF(it.cx - 30f, it.cy - 30f, it.cx + (it.cols * trayCellSize) + 30f, it.cy + (it.rows * trayCellSize) + 30f).contains(tx, ty)) {
+                    soundManager.playPick(); draggingShapeIndex = i; draggingShape = it
+                    it.cx = tx - (it.cols * cellSize) / 2f; it.cy = ty - (it.rows * cellSize) - 180f
+                    dragTouchOffsetX = tx - it.cx; dragTouchOffsetY = ty - it.cy; return true
+                }}
             }
             MotionEvent.ACTION_MOVE -> {
-                draggingShape?.let { shape ->
-                    shape.cx = tx - dragTouchOffsetX
-                    shape.cy = ty - dragTouchOffsetY
-                    
-                    val centerCol = (shape.cx + (shape.cols * cellSize)/2f - boardX) / cellSize
-                    val centerRow = (shape.cy + (shape.rows * cellSize)/2f - boardY) / cellSize
-                    
-                    hoverCol = (centerCol - shape.cols/2f).roundToInt()
-                    hoverRow = (centerRow - shape.rows/2f).roundToInt()
-                    
-                    canFitHover = canPlaceShape(shape, hoverRow, hoverCol)
-                    invalidate()
-                    return true
+                draggingShape?.let { 
+                    it.cx = tx - dragTouchOffsetX; it.cy = ty - dragTouchOffsetY
+                    hoverCol = ((it.cx + (it.cols * cellSize)/2f - boardX) / cellSize - it.cols/2f).roundToInt()
+                    hoverRow = ((it.cy + (it.rows * cellSize)/2f - boardY) / cellSize - it.rows/2f).roundToInt()
+                    canFitHover = canPlaceShape(it, hoverRow, hoverCol); return true
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                draggingShape?.let { shape ->
+                draggingShape?.let { 
                     if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
-                        placeShape(shape, hoverRow, hoverCol)
-                        shape.placed = true
-                        soundManager.playDrop()
-
-                        if (trayShapes.all { it == null || it.placed }) fillTray() else checkGameOver()
-                    } else {
-                        updateTrayPositions()
-                    }
-                    draggingShape = null; draggingShapeIndex = -1; hoverRow = -1; hoverCol = -1; canFitHover = false
-                    invalidate()
-                    return true
+                        placeShape(it, hoverRow, hoverCol); it.placed = true; soundManager.playDrop()
+                        if (trayShapes.all { s -> s == null || s.placed }) fillTray() else checkGameOver()
+                    } else updateTrayPositions()
+                    draggingShape = null; draggingShapeIndex = -1; hoverRow = -1; hoverCol = -1; canFitHover = false; return true
                 }
             }
         }
         return true
     }
 
-    private fun canPlaceShape(shape: Shape, rOffset: Int, cOffset: Int): Boolean {
-        for (r in 0 until shape.rows) {
-            for (c in 0 until shape.cols) {
-                if (shape.matrix[r][c] != 0) {
-                    val targetR = rOffset + r
-                    val targetC = cOffset + c
-                    if (targetR !in 0..7 || targetC !in 0..7) return false
-                    if (grid[targetR][targetC] != 0) return false
-                }
-            }
-        }
+    private fun canPlaceShape(shape: Shape, rOff: Int, cOff: Int): Boolean {
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0 && (rOff + r !in 0..7 || cOff + c !in 0..7 || grid[rOff + r][cOff + c] != 0)) return false
         return true
     }
 
-    private fun placeShape(shape: Shape, rOffset: Int, cOffset: Int) {
-        var blocksPlaced = 0
-        for (r in 0 until shape.rows) {
-            for (c in 0 until shape.cols) {
-                if (shape.matrix[r][c] != 0) {
-                    grid[rOffset + r][cOffset + c] = shape.matrix[r][c]
-                    blocksPlaced++
-                }
-            }
-        }
-        score += blocksPlaced * 10
-        checkLines()
+    private fun placeShape(shape: Shape, rOff: Int, cOff: Int) {
+        var blocks = 0
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) { grid[rOff + r][cOff + c] = shape.matrix[r][c]; blocks++ }
+        score += blocks * 10; checkLines()
     }
 
     private fun checkLines() {
-        val rowsToClear = mutableListOf<Int>()
-        val colsToClear = mutableListOf<Int>()
+        val rows = mutableListOf<Int>(); val cols = mutableListOf<Int>()
+        for (r in 0 until 8) if ((0 until 8).all { c -> grid[r][c] != 0 }) rows.add(r)
+        for (c in 0 until 8) if ((0 until 8).all { r -> grid[r][c] != 0 }) cols.add(c)
+        val total = rows.size + cols.size
 
-        for (r in 0 until 8) { if ((0 until 8).all { c -> grid[r][c] != 0 }) rowsToClear.add(r) }
-        for (c in 0 until 8) { if ((0 until 8).all { r -> grid[r][c] != 0 }) colsToClear.add(c) }
-
-        val totalLines = rowsToClear.size + colsToClear.size
-
-        if (totalLines > 0) {
-            soundManager.playClear()
-            soundManager.playComboVoice(totalLines)
+        if (total > 0) {
+            soundManager.playClear(); vibratePhone(100L)
+            handler.postDelayed({ soundManager.playComboVoice(total) }, 600)
             
-            for (r in rowsToClear) {
-                for (c in 0 until 8) {
-                    val colorId = grid[r][c]
-                    val bX = boardX + c * cellSize + cellSize/2f
-                    val bY = boardY + r * cellSize + cellSize/2f
-                    blasts.add(BlastParticle(bX, bY, cellSize/2f, 255, getBaseColor(colorId)))
-                    grid[r][c] = 0
-                }
-                score += 100
-            }
-            for (c in colsToClear) {
-                for (r in 0 until 8) {
-                    val colorId = grid[r][c]
-                    if (colorId != 0) {
-                        val bX = boardX + c * cellSize + cellSize/2f
-                        val bY = boardY + r * cellSize + cellSize/2f
-                        blasts.add(BlastParticle(bX, bY, cellSize/2f, 255, getBaseColor(colorId)))
-                        grid[r][c] = 0
-                    }
-                }
-                score += 100
-            }
-            invalidate()
+            for (r in rows) { for (c in 0 until 8) { val colorId = grid[r][c]; val bX = boardX + c * cellSize + cellSize/2f; val bY = boardY + r * cellSize + cellSize/2f; for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId))); grid[r][c] = 0 }; score += 100 }
+            for (c in cols) { for (r in 0 until 8) { val colorId = grid[r][c]; if (colorId != 0) { val bX = boardX + c * cellSize + cellSize/2f; val bY = boardY + r * cellSize + cellSize/2f; for(i in 0..5) particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId))); grid[r][c] = 0 } }; score += 100 }
         }
     }
 
     private fun checkGameOver() {
         var canMakeMove = false
-        for (shape in trayShapes) {
-            if (shape != null && !shape.placed) {
-                for (r in 0 until 8) {
-                    for (c in 0 until 8) {
-                        if (canPlaceShape(shape, r, c)) { canMakeMove = true; break }
-                    }
-                    if (canMakeMove) break
-                }
-            }
+        for (shape in trayShapes) if (shape != null && !shape.placed) {
+            for (r in 0 until 8) for (c in 0 until 8) if (canPlaceShape(shape, r, c)) { canMakeMove = true; break }
             if (canMakeMove) break
         }
-        if (!canMakeMove) { isGameOver = true; soundManager.playGameOver(); invalidate() }
+        if (!canMakeMove) { isGameOver = true; soundManager.playGameOver() }
     }
 
-    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); soundManager.release() }
+    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); handler.removeCallbacks(renderLoop); soundManager.release() }
 }
