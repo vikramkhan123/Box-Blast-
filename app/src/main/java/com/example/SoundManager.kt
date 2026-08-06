@@ -69,28 +69,22 @@ class SoundManager(val context: Context) {
     }
 
     fun playBGM() {
-        if (bgmPlayer?.isPlaying == true) return
         isBgmActive = true
-        if (bgmPlayer == null) startNextTrack() else bgmPlayer?.start()
-    }
-
-    private fun startNextTrack() {
-        if (!isBgmActive) return
+        if (bgmPlayer != null && bgmPlayer!!.isPlaying) return
+        
         try {
-            bgmPlayer?.release()
-            bgmPlayer = MediaPlayer.create(context, bgmPlaylist[currentBgmIndex]).apply {
-                setVolume(1.0f, 1.0f)
-                setOnCompletionListener {
-                    release()
+            if (bgmPlayer == null) {
+                bgmPlayer = MediaPlayer.create(context, bgmPlaylist[currentBgmIndex])
+                bgmPlayer?.setVolume(1.0f, 1.0f)
+                bgmPlayer?.setOnCompletionListener {
+                    it.release()
                     bgmPlayer = null
                     currentBgmIndex = (currentBgmIndex + 1) % bgmPlaylist.size
-                    if (isBgmActive) handler.postDelayed({ startNextTrack() }, 3000)
+                    if (isBgmActive) handler.postDelayed({ playBGM() }, 1000)
                 }
-                start()
             }
-        } catch (e: Exception) { 
-            e.printStackTrace() 
-        }
+            bgmPlayer?.start()
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
     fun pauseBGM() {
