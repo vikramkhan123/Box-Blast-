@@ -67,11 +67,15 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
+                soundManager.playCountdownTick() // ONLY TICK TICK
                 adCountdown--
-                soundManager.playCountdownTick()
                 if (adCountdown == 0) {
-                    isWaitingForAd = false; isGameOver = true; soundManager.playGameOver()
-                } else handler.postDelayed(this, 1000L)
+                    isWaitingForAd = false; isGameOver = true
+                    soundManager.playGameOver() // Play game over when timer hits 0
+                } else {
+                    handler.postDelayed(this, 1000L)
+                }
+                invalidate()
             }
         }
     }
@@ -231,17 +235,14 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
         if (event.action == MotionEvent.ACTION_DOWN) {
             if (isWaitingForAd && centerBtnRect.contains(tx, ty)) {
-                soundManager.playBtnClick()
-                handler.removeCallbacks(timerRunnable)
+                soundManager.playBtnClick(); handler.removeCallbacks(timerRunnable)
                 (context as android.app.Activity).let { activity ->
                     AdManager.showRewardAd(activity) { rewarded ->
                         if (rewarded) {
-                            isWaitingForAd = false
-                            trayShapes[0] = Shape(arrayOf(intArrayOf(1))) // 1x1 block reward
-                            trayShapes[1] = null; trayShapes[2] = null
+                            isWaitingForAd = false; trayShapes[0] = Shape(arrayOf(intArrayOf(1))); trayShapes[1] = null; trayShapes[2] = null
                             updateTrayPositions(); invalidate()
-                        } else {
-                            isWaitingForAd = false; isGameOver = true; invalidate()
+                        } else { 
+                            isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); invalidate() 
                         }
                     }
                 }
@@ -313,10 +314,11 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             if (canMakeMove) break
         }
         if (!canMakeMove) { 
-            soundManager.playGameOver()
-            handler.postDelayed({
-                isWaitingForAd = true; adCountdown = 5; handler.post(timerRunnable); invalidate()
-            }, 1500) 
+            // NO GAME OVER SOUND HERE, ONLY TIMER STARTS
+            isWaitingForAd = true
+            adCountdown = 5
+            handler.post(timerRunnable)
+            invalidate()
         }
     }
 
