@@ -22,6 +22,8 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     
     private var score = 0
     private var isGameOver = false
+    private var isWaitingForAd = false
+    private var adCountdown = 5
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
@@ -40,7 +42,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
     private var trayY = 0f; private var trayCellSize = 0f
-    private val restartBtnRect = RectF()
+    private val centerBtnRect = RectF()
 
     val SHAPES = listOf(
         arrayOf(intArrayOf(1)), arrayOf(intArrayOf(1, 1)), arrayOf(intArrayOf(1), intArrayOf(1)),
@@ -61,24 +63,32 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private var hoverRow = -1; private var hoverCol = -1; private var canFitHover = false
 
     private val renderLoop = object : Runnable { override fun run() { invalidate(); handler.postDelayed(this, 16L) } }
+    
+    private val timerRunnable = object : Runnable {
+        override fun run() {
+            if (isWaitingForAd && adCountdown > 0) {
+                adCountdown--
+                soundManager.playCountdownTick()
+                if (adCountdown == 0) {
+                    isWaitingForAd = false; isGameOver = true; soundManager.playGameOver()
+                } else handler.postDelayed(this, 1000L)
+            }
+        }
+    }
 
     init { restartGame(); handler.post(renderLoop) }
 
-    // MISSING FUNCTION ADDED HERE
     private fun vibratePhone(duration: Long = 50L) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(duration)
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+            else @Suppress("DEPRECATION") vibrator.vibrate(duration)
         } catch (e: Exception) { }
     }
 
     private fun restartGame() {
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
-        score = 0; isGameOver = false; particles.clear()
+        score = 0; isGameOver = false; isWaitingForAd = false; adCountdown = 5
+        particles.clear()
         for (i in 0 until 3) trayShapes[i] = null
         fillTray()
     }
@@ -93,17 +103,14 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 trayShapes[i] = Shape(copy)
             }
         }
-        
         for (shape in trayShapes) {
             if (shape != null && !shape.placed) {
                 for(r in 0 until 8) for(c in 0 until 8) if(canPlaceShape(shape, r, c)) { anyCanFit = true; break }
             }
         }
-        
         if(!anyCanFit) trayShapes[0] = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
-
         if (width > 0 && height > 0) updateTrayPositions()
-        checkGameOver()
+        checkGameOverCondition()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -111,7 +118,8 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         val padding = 30f 
         boardSize = w - padding * 2; cellSize = boardSize / 8; boardX = padding; boardY = padding + 250f
         trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f
-        restartBtnRect.set(w/2f - 300f, boardY + boardSize/2f + 80f, w/2f + 300f, boardY + boardSize/2f + 220f)
+        val bw = 600f; val bh = 140f
+        centerBtnRect.set(w/2f - bw/2f, boardY + boardSize/2f + 80f, w/2f + bw/2f, boardY + boardSize/2f + 80f + bh)
         updateTrayPositions()
     }
 
@@ -134,6 +142,16 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         text3DPaint.textSize = size; text3DPaint.color = depthColor
         for (i in 1..6) canvas.drawText(text, x, y + i * 2, text3DPaint)
         text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
+    }
+
+    private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int) {
+        btnPaint.color = bottomColor
+        val shadowRect = RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f)
+        canvas.drawRoundRect(shadowRect, 30f, 30f, btnPaint)
+        btnPaint.color = topColor
+        canvas.drawRoundRect(rect, 30f, 30f, btnPaint)
+        text3DPaint.textSize = 45f; text3DPaint.color = Color.WHITE
+        canvas.drawText(text, rect.centerX(), rect.centerY() + 15f, text3DPaint)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -168,16 +186,15 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             }
         }
 
-        if (isGameOver) {
+        if (isWaitingForAd) {
+            canvas.drawColor(0xDD000000.toInt())
+            draw3DText(canvas, "OUT OF MOVES", width / 2f, boardY + boardSize / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 90f)
+            draw3DText(canvas, "$adCountdown", width / 2f, boardY + boardSize / 2f, Color.WHITE, Color.DKGRAY, 150f)
+            draw3DButton(canvas, centerBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF42E5FF.toInt(), 0xFF0055FF.toInt())
+        } else if (isGameOver) {
             canvas.drawColor(0xDD000000.toInt())
             draw3DText(canvas, "GAME OVER", width / 2f, boardY + boardSize / 2f - 40f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
-            
-            btnPaint.color = 0xFF8B0000.toInt()
-            canvas.drawRoundRect(RectF(restartBtnRect.left, restartBtnRect.top + 15f, restartBtnRect.right, restartBtnRect.bottom + 15f), 30f, 30f, btnPaint)
-            btnPaint.color = 0xFFFF5E62.toInt()
-            canvas.drawRoundRect(restartBtnRect, 30f, 30f, btnPaint)
-            text3DPaint.textSize = 45f; text3DPaint.color = Color.WHITE
-            canvas.drawText("RESTART", restartBtnRect.centerX(), restartBtnRect.centerY() + 15f, text3DPaint)
+            draw3DButton(canvas, centerBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
         }
     }
 
@@ -211,8 +228,28 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val tx = event.x; val ty = event.y
-        if (event.action == MotionEvent.ACTION_DOWN && isGameOver && restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
-        if (isGameOver) return true
+
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            if (isWaitingForAd && centerBtnRect.contains(tx, ty)) {
+                soundManager.playBtnClick()
+                handler.removeCallbacks(timerRunnable)
+                (context as android.app.Activity).let { activity ->
+                    AdManager.showRewardAd(activity) { rewarded ->
+                        if (rewarded) {
+                            isWaitingForAd = false
+                            trayShapes[0] = Shape(arrayOf(intArrayOf(1))) // 1x1 block reward
+                            trayShapes[1] = null; trayShapes[2] = null
+                            updateTrayPositions(); invalidate()
+                        } else {
+                            isWaitingForAd = false; isGameOver = true; invalidate()
+                        }
+                    }
+                }
+                return true
+            }
+            if (isGameOver && centerBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
+        }
+        if (isGameOver || isWaitingForAd) return true
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
@@ -234,7 +271,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 draggingShape?.let { 
                     if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                         placeShape(it, hoverRow, hoverCol); it.placed = true; soundManager.playDrop()
-                        if (trayShapes.all { s -> s == null || s.placed }) fillTray() else checkGameOver()
+                        if (trayShapes.all { s -> s == null || s.placed }) fillTray() else checkGameOverCondition()
                     } else updateTrayPositions()
                     draggingShape = null; draggingShapeIndex = -1; hoverRow = -1; hoverCol = -1; canFitHover = false; return true
                 }
@@ -269,14 +306,19 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         }
     }
 
-    private fun checkGameOver() {
+    private fun checkGameOverCondition() {
         var canMakeMove = false
         for (shape in trayShapes) if (shape != null && !shape.placed) {
             for (r in 0 until 8) for (c in 0 until 8) if (canPlaceShape(shape, r, c)) { canMakeMove = true; break }
             if (canMakeMove) break
         }
-        if (!canMakeMove) { isGameOver = true; soundManager.playGameOver() }
+        if (!canMakeMove) { 
+            soundManager.playGameOver()
+            handler.postDelayed({
+                isWaitingForAd = true; adCountdown = 5; handler.post(timerRunnable); invalidate()
+            }, 1500) 
+        }
     }
 
-    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); handler.removeCallbacks(renderLoop); soundManager.release() }
+    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); handler.removeCallbacks(renderLoop); handler.removeCallbacks(timerRunnable); soundManager.release() }
 }
