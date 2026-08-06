@@ -30,38 +30,34 @@ import kotlin.math.sin
 
 class LevelSelectionActivity : ComponentActivity() {
     private lateinit var soundManager: SoundManager
-    // UI state jo back aane par automatically refresh hoga
     private var maxLevelState by mutableIntStateOf(1)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         soundManager = SoundManager(this)
-        
         val prefs = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
         maxLevelState = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
 
         setContent {
             Box(modifier = Modifier.fillMaxSize()) {
                 LevelNeonBackground() 
-                
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 10.dp), contentAlignment = Alignment.Center) {
                         Text(text = "ADVENTURE MAP", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                     }
-                    
                     val scrollState = rememberLazyListState()
                     LazyColumn(
                         state = scrollState, modifier = Modifier.fillMaxSize(),
                         reverseLayout = true, contentPadding = PaddingValues(vertical = 40.dp)
                     ) {
-                        items(50) { index ->
+                        items(500) { index -> // 500 LEVELS YAHAN HAIN
                             val level = index + 1
                             val isUnlocked = level <= maxLevelState
                             val isCurrent = level == maxLevelState
                             val xOffset = (sin(index * 0.7) * 120).dp
 
                             Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                                if (level < 50) {
+                                if (level < 500) {
                                     Canvas(modifier = Modifier.fillMaxSize()) {
                                         val nextOffset = (sin((index + 1) * 0.7) * 120).dp.toPx()
                                         val currentOffset = xOffset.toPx()
@@ -89,15 +85,11 @@ class LevelSelectionActivity : ComponentActivity() {
             }
         }
     }
-
     override fun onResume() { 
         super.onResume()
-        // Jaise hi hum back aayein, max level update ho jaye
-        val prefs = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
-        maxLevelState = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
+        maxLevelState = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE).getInt("MaxAdventureLevel", 1)
         soundManager.playBGM() 
     }
-    
     override fun onPause() { super.onPause(); soundManager.pauseBGM() }
     override fun onDestroy() { super.onDestroy(); soundManager.release() }
 }
