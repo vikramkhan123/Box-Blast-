@@ -30,17 +30,18 @@ import kotlin.math.sin
 
 class LevelSelectionActivity : ComponentActivity() {
     private lateinit var soundManager: SoundManager
+    // UI state jo back aane par automatically refresh hoga
+    private var maxLevelState by mutableIntStateOf(1)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         soundManager = SoundManager(this)
         
-        setContent {
-            val prefs = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
-            val maxLevel = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
+        val prefs = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
+        maxLevelState = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
 
+        setContent {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Background calling fixed here
                 LevelNeonBackground() 
                 
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -55,8 +56,8 @@ class LevelSelectionActivity : ComponentActivity() {
                     ) {
                         items(50) { index ->
                             val level = index + 1
-                            val isUnlocked = level <= maxLevel
-                            val isCurrent = level == maxLevel
+                            val isUnlocked = level <= maxLevelState
+                            val isCurrent = level == maxLevelState
                             val xOffset = (sin(index * 0.7) * 120).dp
 
                             Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -88,7 +89,15 @@ class LevelSelectionActivity : ComponentActivity() {
             }
         }
     }
-    override fun onResume() { super.onResume(); soundManager.playBGM() }
+
+    override fun onResume() { 
+        super.onResume()
+        // Jaise hi hum back aayein, max level update ho jaye
+        val prefs = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
+        maxLevelState = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
+        soundManager.playBGM() 
+    }
+    
     override fun onPause() { super.onPause(); soundManager.pauseBGM() }
     override fun onDestroy() { super.onDestroy(); soundManager.release() }
 }
