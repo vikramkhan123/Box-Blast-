@@ -58,11 +58,19 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         override fun run() { if (!isGameOver && !isWaitingForAd) { moveDown(); invalidate(); handler.postDelayed(this, speedMs) } }
     }
     private val renderLoop = object : Runnable { override fun run() { invalidate(); handler.postDelayed(this, 16L) } }
+    
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
-                adCountdown--; soundManager.playCountdownTick()
-                if (adCountdown == 0) { isWaitingForAd = false; isGameOver = true; soundManager.playGameOver() } else handler.postDelayed(this, 1000L)
+                soundManager.playCountdownTick() // ONLY TICK TICK
+                adCountdown--
+                if (adCountdown == 0) { 
+                    isWaitingForAd = false; isGameOver = true
+                    soundManager.playGameOver() // Play game over when timer hits 0
+                } else {
+                    handler.postDelayed(this, 1000L)
+                }
+                invalidate()
             }
         }
     }
@@ -84,8 +92,8 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private fun spawnPiece() {
         currentPiece = nextPiece; nextPiece = generatePiece()
         if (!isValidPosition(currentPiece!!.matrix, currentPiece!!.x, currentPiece!!.y)) {
-            soundManager.playGameOver()
-            handler.postDelayed({ isWaitingForAd = true; adCountdown = 5; handler.post(timerRunnable); invalidate() }, 1500)
+            // NO GAME OVER SOUND HERE, ONLY TIMER STARTS
+            isWaitingForAd = true; adCountdown = 5; handler.post(timerRunnable); invalidate()
         }
     }
 
@@ -217,10 +225,11 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                 AdManager.showRewardAd(activity) { rewarded ->
                     if (rewarded) {
                         isWaitingForAd = false
-                        // 4 Bottom lines clear as reward
                         for (r in ROWS - 4 until ROWS) for (c in 0 until COLS) grid[r][c] = 0
                         spawnPiece(); handler.postDelayed(gameLoop, speedMs); invalidate()
-                    } else { isWaitingForAd = false; isGameOver = true; invalidate() }
+                    } else { 
+                        isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); invalidate() 
+                    }
                 }
             }
             return true
