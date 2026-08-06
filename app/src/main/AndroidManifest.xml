@@ -12,6 +12,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
         
+        <!-- Google AdMob Test App ID -->
+<meta-data
+    android:name="com.google.android.gms.ads.APPLICATION_ID"
+    android:value="ca-app-pub-3940256099942544~3347511713"/>
+
+<activity android:name=".LevelSelectionActivity" />
         <!-- Main Menu Activity -->
         <activity
             android:name=".MainActivity"
