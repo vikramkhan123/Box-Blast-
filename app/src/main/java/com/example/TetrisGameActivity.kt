@@ -5,12 +5,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 
 class TetrisGameActivity : ComponentActivity() {
+    private lateinit var gameView: TetrisGameView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
-        // Tetris ka Canvas Game Engine yahan set kiya gaya hai
-        val gameView = TetrisGameView(this)
+        gameView = TetrisGameView(this)
         setContentView(gameView)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        gameView.soundManager.playBGM()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        gameView.soundManager.pauseBGM()
     }
 }
