@@ -15,6 +15,7 @@ import kotlin.random.Random
 class TetrisGameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
 
     val soundManager = SoundManager(context)
+    private val prefs = context.getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     private val handler = Handler(Looper.getMainLooper())
     
@@ -22,7 +23,9 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val grid = Array(ROWS) { IntArray(COLS) { 0 } }
     
     private var score = 0; private var speedMs = 600L
-    private var isGameOver = false; private var isWaitingForAd = false; private var adCountdown = 10 // Timer 10 Sec
+    private var highScore = prefs.getInt("TetrisHighScore", 0) // HIGH SCORE
+    
+    private var isGameOver = false; private var isWaitingForAd = false; private var adCountdown = 10 
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
@@ -66,6 +69,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                 adCountdown--
                 if (adCountdown == 0) { 
                     isWaitingForAd = false; isGameOver = true
+                    soundManager.stopCountdownTick() // Timer stop
                     soundManager.playGameOver() // PLAY GAME OVER HERE
                 } else {
                     handler.postDelayed(this, 1000L)
@@ -92,7 +96,6 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private fun spawnPiece() {
         currentPiece = nextPiece; nextPiece = generatePiece()
         if (!isValidPosition(currentPiece!!.matrix, currentPiece!!.x, currentPiece!!.y)) {
-            // ONLY TIMER STARTS
             isWaitingForAd = true; adCountdown = 10; handler.post(timerRunnable); invalidate()
         }
     }
@@ -138,15 +141,20 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         super.onDraw(canvas)
         drawGeminiBackground(canvas)
 
-        draw3DText(canvas, "SCORE", boardX + 60f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 50f, Paint.Align.LEFT)
-        draw3DText(canvas, "$score", boardX + 60f, 160f, Color.WHITE, Color.DKGRAY, 65f, Paint.Align.LEFT)
-        val nextTitleX = boardX + boardSizeW - 100f
-        draw3DText(canvas, "NEXT", nextTitleX, 100f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 50f)
+        // HIGH SCORE UI
+        draw3DText(canvas, "SCORE", boardX + 60f, 80f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 40f, Paint.Align.LEFT)
+        draw3DText(canvas, "$score", boardX + 60f, 125f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.LEFT)
+        
+        draw3DText(canvas, "BEST", width/2f, 80f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f, Paint.Align.CENTER)
+        draw3DText(canvas, "$highScore", width/2f, 125f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.CENTER)
+
+        val nextTitleX = boardX + boardSizeW - 60f
+        draw3DText(canvas, "NEXT", nextTitleX, 80f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f)
         
         nextPiece?.let { piece ->
             val previewSize = cellSize * 0.7f
             for (r in 0 until piece.matrix.size) for (c in 0 until piece.matrix[0].size) 
-                if (piece.matrix[r][c] != 0) drawGlassy3DBlock(canvas, nextTitleX - (piece.matrix[0].size*previewSize)/2f + c * previewSize, 120f + r * previewSize, previewSize, piece.colorId)
+                if (piece.matrix[r][c] != 0) drawGlassy3DBlock(canvas, nextTitleX - (piece.matrix[0].size*previewSize)/2f + c * previewSize, 100f + r * previewSize, previewSize, piece.colorId)
         }
 
         val rect = RectF(boardX, boardY, boardX + boardSizeW, boardY + boardSizeH)
@@ -220,7 +228,9 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         val tx = event.x; val ty = event.y
 
         if (isWaitingForAd && centerBtnRect.contains(tx, ty)) {
-            soundManager.playBtnClick(); handler.removeCallbacks(timerRunnable)
+            soundManager.playBtnClick()
+            soundManager.stopCountdownTick() // Timer stop
+            handler.removeCallbacks(timerRunnable)
             (context as android.app.Activity).let { activity ->
                 AdManager.showRewardAd(activity) { rewarded ->
                     if (rewarded) {
@@ -297,6 +307,12 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                     val blastX = boardX + c * cellSize + cellSize/2f
                     for(i in 0..6) particles.add(Particle(blastX, blastY, Random.nextFloat()*16-8f, Random.nextFloat()*20-15f, 1f, getBaseColor(Random.nextInt(1,6))))
                 }
+            }
+            
+            // Check High Score
+            if (score > highScore) {
+                highScore = score
+                prefs.edit().putInt("TetrisHighScore", highScore).apply()
             }
         }
     }
