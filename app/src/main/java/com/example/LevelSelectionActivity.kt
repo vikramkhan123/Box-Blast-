@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +40,8 @@ class LevelSelectionActivity : ComponentActivity() {
             val maxLevel = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
 
             Box(modifier = Modifier.fillMaxSize()) {
-                GeminiNeonBackground() 
+                // Background calling fixed here
+                LevelNeonBackground() 
                 
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 10.dp), contentAlignment = Alignment.Center) {
@@ -88,4 +91,19 @@ class LevelSelectionActivity : ComponentActivity() {
     override fun onResume() { super.onResume(); soundManager.playBGM() }
     override fun onPause() { super.onPause(); soundManager.pauseBGM() }
     override fun onDestroy() { super.onDestroy(); soundManager.release() }
+}
+
+@Composable
+fun LevelNeonBackground() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val time by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 1000f, animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing)))
+    Canvas(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
+        val cx1 = size.width / 2f + kotlin.math.sin(time / 150f) * 350f
+        val cy1 = size.height / 3f + kotlin.math.cos(time / 120f) * 350f
+        drawRect(Brush.radialGradient(listOf(Color(0x77E94560), Color(0x00E94560)), Offset(cx1, cy1), 900f))
+        
+        val cx2 = size.width / 2f + kotlin.math.cos(time / 140f) * 400f
+        val cy2 = size.height / 1.5f + kotlin.math.sin(time / 160f) * 400f
+        drawRect(Brush.radialGradient(listOf(Color(0x770F80FF), Color(0x000F80FF)), Offset(cx2, cy2), 1000f))
+    }
 }
