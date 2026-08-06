@@ -14,26 +14,23 @@ class AdventureGameView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private val soundManager = SoundManager(context)
+    val soundManager = SoundManager(context)
     private val prefs = context.getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
     
     private val grid = Array(8) { IntArray(8) { 0 } }
     
-    // Level System
     private var currentLevel = prefs.getInt("AdventureLevel", 1)
     private var targetGems = 10 + (currentLevel * 2) 
     private var gemsCollected = 0
     private var isGameOver = false
     private var isLevelComplete = false
 
-    // Animations Data
     data class FlyingGem(var startX: Float, var startY: Float, var progress: Float = 0f)
     private val flyingGems = mutableListOf<FlyingGem>()
     
     data class BlastParticle(var cx: Float, var cy: Float, var radius: Float, var alpha: Int, val color: Int)
     private val blasts = mutableListOf<BlastParticle>()
 
-    // Paints
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1B264A.toInt(); style = Paint.Style.FILL }
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF354B8B.toInt(); style = Paint.Style.STROKE; strokeWidth = 12f }
@@ -47,7 +44,6 @@ class AdventureGameView @JvmOverloads constructor(
     private val overlayTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF38EF7D.toInt(); textSize = 90f; typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER; setShadowLayer(15f, 0f, 10f, Color.BLACK) }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2CD04E.toInt(); style = Paint.Style.FILL }
     
-    // ERROR FIXED HERE: Button text paint defined properly at class level
     private val btnTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
         color = Color.WHITE
         textSize = 50f
@@ -269,7 +265,6 @@ class AdventureGameView @JvmOverloads constructor(
             canvas.drawText("WELL DONE!", width / 2f, boardY + boardSize / 2f, overlayTextPaint)
             
             canvas.drawRoundRect(nextLevelBtnRect, 30f, 30f, btnPaint)
-            // Error line replaced with btnTextPaint
             canvas.drawText("NEXT LEVEL", nextLevelBtnRect.centerX(), nextLevelBtnRect.centerY() + 15f, btnTextPaint)
             
         } else if (isGameOver) {
@@ -279,7 +274,6 @@ class AdventureGameView @JvmOverloads constructor(
             
             btnPaint.color = 0xFFFF5E62.toInt()
             canvas.drawRoundRect(nextLevelBtnRect, 30f, 30f, btnPaint)
-            // Error line replaced with btnTextPaint
             canvas.drawText("RESTART", nextLevelBtnRect.centerX(), nextLevelBtnRect.centerY() + 15f, btnTextPaint)
             btnPaint.color = 0xFF2CD04E.toInt() 
         }
@@ -379,6 +373,7 @@ class AdventureGameView @JvmOverloads constructor(
 
         if (event.action == MotionEvent.ACTION_DOWN) {
             if ((isLevelComplete || isGameOver) && nextLevelBtnRect.contains(tx, ty)) {
+                soundManager.playBtnClick()
                 if (isLevelComplete) {
                     currentLevel++
                     prefs.edit().putInt("AdventureLevel", currentLevel).apply()
@@ -477,8 +472,11 @@ class AdventureGameView @JvmOverloads constructor(
         for (r in 0 until 8) { if ((0 until 8).all { c -> grid[r][c] != 0 }) rowsToClear.add(r) }
         for (c in 0 until 8) { if ((0 until 8).all { r -> grid[r][c] != 0 }) colsToClear.add(c) }
 
-        if (rowsToClear.isNotEmpty() || colsToClear.isNotEmpty()) {
+        val totalLines = rowsToClear.size + colsToClear.size
+
+        if (totalLines > 0) {
             soundManager.playClear()
+            soundManager.playComboVoice(totalLines)
             
             for (r in rowsToClear) {
                 for (c in 0 until 8) {
