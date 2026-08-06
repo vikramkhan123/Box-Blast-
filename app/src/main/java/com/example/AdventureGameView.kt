@@ -30,7 +30,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private var isLevelComplete = false
     
     private var isWaitingForAd = false
-    private var adCountdown = 5
+    private var adCountdown = 10 // Timer updated to 10 Sec
     private var isGameOver = false
 
     data class FlyingGem(var startX: Float, var startY: Float, var type: Int, var progress: Float = 0f)
@@ -79,12 +79,12 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
-                soundManager.playCountdownTick() // ONLY TICK TICK
+                soundManager.playCountdownTick()
                 adCountdown--
                 if (adCountdown == 0) { 
                     isWaitingForAd = false
                     isGameOver = true 
-                    soundManager.playGameOver() // Play game over when timer hits 0
+                    soundManager.playGameOver() // GAME OVER SOUND PLAYED ONLY HERE
                 } else {
                     handler.postDelayed(this, 1000L)
                 }
@@ -103,16 +103,16 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     }
 
     private fun getAvailableGemTypes(): List<Int> {
-        val types = mutableListOf(10) // Star
-        if (currentLevel >= 3) types.add(11) // Diamond
-        if (currentLevel >= 6) types.add(12) // Hexagon
-        if (currentLevel >= 10) types.add(13) // Heart
+        val types = mutableListOf(10) 
+        if (currentLevel >= 3) types.add(11) 
+        if (currentLevel >= 6) types.add(12) 
+        if (currentLevel >= 10) types.add(13) 
         return types
     }
 
     private fun initLevel() {
         targetGems = 10 + (currentLevel * 2)
-        gemsCollected = 0; isGameOver = false; isLevelComplete = false; isWaitingForAd = false; adCountdown = 5
+        gemsCollected = 0; isGameOver = false; isLevelComplete = false; isWaitingForAd = false; adCountdown = 10
         flyingGems.clear(); particles.clear()
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
         var spawned = 0
@@ -264,7 +264,6 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
         val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
-        
         val baseColor = getBaseColor(if (colorId >= 10) (colorId - 9) else colorId)
         
         val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, intArrayOf(adjustColorLightness(baseColor, 1.4f), baseColor, adjustColorLightness(baseColor, 0.6f)), null, Shader.TileMode.CLAMP)
@@ -422,9 +421,9 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             if (canMakeMove) break
         }
         if (!canMakeMove) { 
-            // NO GAME OVER SOUND HERE, ONLY TIMER STARTS
+            // ONLY START TIMER - NO GAME OVER MUSIC
             isWaitingForAd = true
-            adCountdown = 5
+            adCountdown = 10
             handler.post(timerRunnable)
             invalidate()
         }
