@@ -6,21 +6,31 @@ import android.media.MediaPlayer
 import android.media.SoundPool
 import android.os.Handler
 import android.os.Looper
-import kotlin.random.Random
 
 class SoundManager(val context: Context) {
     private var soundPool: SoundPool
     
-    var pickSoundId = 0; var dropSoundId = 0; var clearSoundId = 0
-    var gameOverSoundId = 0; var btnClickId = 0; var countdownTickId = 0
+    var pickSoundId = 0
+    var dropSoundId = 0
+    var clearSoundId = 0
+    var gameOverSoundId = 0
+    var btnClickId = 0
+    var countdownTickId = 0
     var victorySoundId = 0
     
-    // Voiceovers
-    var voiceGoodId = 0; var voiceExcellentId = 0; var voiceSuperId = 0
-    var voiceMagnificentId = 0; var voiceUnbelievableId = 0
-    var voiceGloriousId = 0; var voiceMajesticId = 0
+    var voiceGoodId = 0
+    var voiceExcellentId = 0
+    var voiceSuperId = 0
+    var voiceMagnificentId = 0
+    var voiceUnbelievableId = 0
+    var voiceGloriousId = 0
+    var voiceMajesticId = 0
 
-    private val bgmPlaylist = listOf(R.raw.bgm_relaxing_1, R.raw.bgm_relaxing_2, R.raw.bgm_relaxing_3)
+    private val bgmPlaylist = listOf(
+        R.raw.bgm_relaxing_1,
+        R.raw.bgm_relaxing_2,
+        R.raw.bgm_relaxing_3
+    )
     private var currentBgmIndex = 0
     private var bgmPlayer: MediaPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -29,9 +39,13 @@ class SoundManager(val context: Context) {
     init {
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
-        soundPool = SoundPool.Builder().setMaxStreams(15).setAudioAttributes(audioAttributes).build()
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(15)
+            .setAudioAttributes(audioAttributes)
+            .build()
 
         try {
             pickSoundId = soundPool.load(context, R.raw.pick_sound, 1)
@@ -49,37 +63,48 @@ class SoundManager(val context: Context) {
             voiceUnbelievableId = soundPool.load(context, R.raw.voice_unbelievable, 1)
             voiceGloriousId = soundPool.load(context, R.raw.voice_glorious, 1)
             voiceMajesticId = soundPool.load(context, R.raw.voice_majestic, 1)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { 
+            e.printStackTrace() 
+        }
     }
 
     fun playBGM() {
+        if (bgmPlayer?.isPlaying == true) return
         isBgmActive = true
-        if (bgmPlayer == null) startNextTrack() else if (bgmPlayer?.isPlaying == false) bgmPlayer?.start()
+        if (bgmPlayer == null) startNextTrack() else bgmPlayer?.start()
     }
 
     private fun startNextTrack() {
         if (!isBgmActive) return
         try {
             bgmPlayer?.release()
-            bgmPlayer = MediaPlayer.create(context, bgmPlaylist[currentBgmIndex])
-            bgmPlayer?.setVolume(0.4f, 0.4f) 
-            bgmPlayer?.setOnCompletionListener {
-                bgmPlayer?.release(); bgmPlayer = null
-                currentBgmIndex = (currentBgmIndex + 1) % bgmPlaylist.size
-                if (isBgmActive) handler.postDelayed({ startNextTrack() }, 5000)
+            bgmPlayer = MediaPlayer.create(context, bgmPlaylist[currentBgmIndex]).apply {
+                setVolume(1.0f, 1.0f)
+                setOnCompletionListener {
+                    release()
+                    bgmPlayer = null
+                    currentBgmIndex = (currentBgmIndex + 1) % bgmPlaylist.size
+                    if (isBgmActive) handler.postDelayed({ startNextTrack() }, 3000)
+                }
+                start()
             }
-            bgmPlayer?.start()
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { 
+            e.printStackTrace() 
+        }
     }
 
     fun pauseBGM() {
-        isBgmActive = false; handler.removeCallbacksAndMessages(null)
+        isBgmActive = false
+        handler.removeCallbacksAndMessages(null)
         if (bgmPlayer?.isPlaying == true) bgmPlayer?.pause()
     }
 
     fun stopBGM() {
-        isBgmActive = false; handler.removeCallbacksAndMessages(null)
-        bgmPlayer?.stop(); bgmPlayer?.release(); bgmPlayer = null
+        isBgmActive = false
+        handler.removeCallbacksAndMessages(null)
+        bgmPlayer?.stop()
+        bgmPlayer?.release()
+        bgmPlayer = null
     }
 
     fun playPick() { if (pickSoundId != 0) soundPool.play(pickSoundId, 1f, 1f, 1, 0, 1f) }
@@ -99,5 +124,8 @@ class SoundManager(val context: Context) {
         if (pool.isNotEmpty()) soundPool.play(pool.random(), 1f, 1f, 1, 0, 1f)
     }
 
-    fun release() { soundPool.release(); stopBGM() }
+    fun release() { 
+        soundPool.release()
+        stopBGM() 
+    }
 }
