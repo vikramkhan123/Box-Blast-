@@ -31,18 +31,16 @@ class AdventureGameView @JvmOverloads constructor(
     private var isGameOver = false
     private var isLevelComplete = false
 
-    // Particle System for Candy Crush Style Blast
     data class FlyingGem(var startX: Float, var startY: Float, var progress: Float = 0f)
     private val flyingGems = mutableListOf<FlyingGem>()
     
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
 
-    // Paints
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
     private val neonBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL } // Glassy Board
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(15f, 0f, 0f, 0xFF42E5FF.toInt()) }
     
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -91,11 +89,10 @@ class AdventureGameView @JvmOverloads constructor(
     private var dragTouchOffsetY = 0f
     private var hoverRow = -1; private var hoverCol = -1; private var canFitHover = false
 
-    // Background Animation Loop
     private val renderLoop = object : Runnable {
         override fun run() {
             invalidate()
-            handler.postDelayed(this, 16L) // 60 FPS
+            handler.postDelayed(this, 16L) 
         }
     }
 
@@ -165,25 +162,10 @@ class AdventureGameView @JvmOverloads constructor(
         updateTrayPositions()
     }
 
-    private fun updateTrayPositions() {
-        if (width == 0) return
-        val sectionWidth = width / 3f
-        for (i in 0 until 3) {
-            val shape = trayShapes[i]
-            if (shape != null && !shape.placed) {
-                val shapeWidth = shape.cols * trayCellSize
-                val shapeHeight = shape.rows * trayCellSize
-                shape.cx = (i * sectionWidth) + (sectionWidth - shapeWidth) / 2f
-                shape.cy = trayY + (sectionWidth - shapeHeight) / 2f
-            }
-        }
-    }
-
     private fun drawGeminiBackground(canvas: Canvas) {
-        canvas.drawColor(0xFF0F172A.toInt()) // Dark base
+        canvas.drawColor(0xFF0F172A.toInt()) 
         val time = System.currentTimeMillis()
         
-        // Blobs moving in orbit
         val cx1 = width / 2f + Math.sin(time / 3000.0).toFloat() * 300f
         val cy1 = height / 3f + Math.cos(time / 2000.0).toFloat() * 300f
         neonBgPaint.shader = RadialGradient(cx1, cy1, 600f, intArrayOf(0x55E94560, 0x00E94560), null, Shader.TileMode.CLAMP)
@@ -220,7 +202,6 @@ class AdventureGameView @JvmOverloads constructor(
             }
         }
 
-        // Neon Shadow Preview
         draggingShape?.let { shape ->
             if (canFitHover && hoverRow in 0..7 && hoverCol in 0..7) {
                 drawNeonShadow(canvas, shape, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize)
@@ -235,7 +216,6 @@ class AdventureGameView @JvmOverloads constructor(
 
         draggingShape?.let { drawShape(canvas, it, it.cx, it.cy, cellSize) }
 
-        // Candy Crush Particle Animation
         if (particles.isNotEmpty()) {
             val iterator = particles.iterator()
             val particlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -247,13 +227,12 @@ class AdventureGameView @JvmOverloads constructor(
                 
                 p.x += p.vx
                 p.y += p.vy
-                p.vy += 1.5f // Gravity
+                p.vy += 1.5f 
                 p.life -= 0.03f
                 if (p.life <= 0) iterator.remove()
             }
         }
 
-        // Flying Gems Animation
         if (flyingGems.isNotEmpty()) {
             val iterator = flyingGems.iterator()
             while (iterator.hasNext()) {
@@ -301,8 +280,20 @@ class AdventureGameView @JvmOverloads constructor(
     }
 
     private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
-        var neonColor = getBaseColor(shape.matrix.flatten().first { it != 0 })
-        if (neonColor == 0xFFE0A800.toInt()) neonColor = Color.YELLOW // For diamond
+        // ERROR FIX: Loop to find the correct color safely
+        var firstColorId = 0
+        for (row in shape.matrix) {
+            for (cell in row) {
+                if (cell != 0) {
+                    firstColorId = cell
+                    break
+                }
+            }
+            if (firstColorId != 0) break
+        }
+        
+        var neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
+        if (firstColorId == 10) neonColor = Color.YELLOW 
         
         neonShadowPaint.color = neonColor
         neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
@@ -321,19 +312,17 @@ class AdventureGameView @JvmOverloads constructor(
         val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
 
         if (colorId == 10) {
-            // Real 3D Deep Socket for Diamond
             blockBasePaint.color = 0xFF0D152B.toInt()
             canvas.drawRoundRect(rect, 16f, 16f, blockBasePaint)
             
             val innerRect = RectF(rect.left + 8f, rect.top + 8f, rect.right - 8f, rect.bottom - 8f)
-            blockBasePaint.color = 0xFF050A1A.toInt() // Darker inner depth
+            blockBasePaint.color = 0xFF050A1A.toInt() 
             canvas.drawRoundRect(innerRect, 8f, 8f, blockBasePaint)
 
             drawStarGem(canvas, x + size * 0.15f, y + size * 0.15f, size * 0.7f)
             return
         }
 
-        // Beautiful Glassy Gradient Block
         val baseColor = getBaseColor(colorId)
         val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom,
             intArrayOf(adjustColorLightness(baseColor, 1.4f), baseColor, adjustColorLightness(baseColor, 0.6f)),
@@ -341,9 +330,8 @@ class AdventureGameView @JvmOverloads constructor(
         
         blockBasePaint.shader = grad
         canvas.drawRoundRect(rect, 16f, 16f, blockBasePaint)
-        blockBasePaint.shader = null // Reset
+        blockBasePaint.shader = null 
 
-        // Glass Reflection Overlay
         val overlayRect = RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.top + size * 0.4f)
         val shineGrad = LinearGradient(overlayRect.left, overlayRect.top, overlayRect.left, overlayRect.bottom,
             0x88FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
@@ -374,13 +362,11 @@ class AdventureGameView @JvmOverloads constructor(
         }
         path.close()
 
-        // Radial glow inside the gem to make it pop
         val gemGrad = RadialGradient(cx, cy, outerRadius, intArrayOf(0xFFFFFFA0.toInt(), 0xFFFFD700.toInt(), 0xFFE65C00.toInt()), null, Shader.TileMode.CLAMP)
         val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = gemGrad; style = Paint.Style.FILL }
         
         canvas.drawPath(path, starPaint)
         
-        // Inner bright spark
         starPaint.shader = null
         starPaint.color = 0xAAFFFFFF.toInt()
         canvas.drawCircle(cx - size*0.15f, cy - size*0.15f, size*0.1f, starPaint)
@@ -388,11 +374,11 @@ class AdventureGameView @JvmOverloads constructor(
 
     private fun getBaseColor(id: Int): Int {
         return when (id) {
-            1 -> 0xFFE63946.toInt() // Vibrant Red
-            2 -> 0xFF00B4D8.toInt() // Neon Blue
-            3 -> 0xFF2DC653.toInt() // Lime Green
-            4 -> 0xFFFFB703.toInt() // Amber
-            5 -> 0xFF9D4EDD.toInt() // Deep Purple
+            1 -> 0xFFE63946.toInt() 
+            2 -> 0xFF00B4D8.toInt() 
+            3 -> 0xFF2DC653.toInt() 
+            4 -> 0xFFFFB703.toInt() 
+            5 -> 0xFF9D4EDD.toInt() 
             else -> 0xFFFFFFFF.toInt()
         }
     }
@@ -491,9 +477,8 @@ class AdventureGameView @JvmOverloads constructor(
 
         if (totalLines > 0) {
             soundManager.playClear()
-            vibratePhone(100L) // Blast Vibration!
+            vibratePhone(100L) 
             
-            // DELAYED COMBO VOICE (Blast hone ke 600ms baad bajega)
             handler.postDelayed({ soundManager.playComboVoice(totalLines) }, 600)
             
             for (r in rowsToClear) {
@@ -502,7 +487,6 @@ class AdventureGameView @JvmOverloads constructor(
                     val bX = boardX + c * cellSize + cellSize/2f
                     val bY = boardY + r * cellSize + cellSize/2f
                     
-                    // Generate Candy Blast Particles
                     for(i in 0..5) {
                         particles.add(Particle(bX, bY, Random.nextFloat()*16-8f, Random.nextFloat()*16-12f, 1f, getBaseColor(colorId)))
                     }
