@@ -1,4 +1,4 @@
-name: Build & Sign Box Blast for Play Store
+name: Build & Sign Box Blast for All Stores
 
 on:
   push:
@@ -21,13 +21,13 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 1. Play Store ke liye AAB generate karna
-    - name: Build Release AAB
-      run: ./gradlew bundleRelease
+    # 1. Play Store ke liye AAB aur Free Stores ke liye APK generate karna
+    - name: Build Release AAB & APK
+      run: ./gradlew bundleRelease assembleRelease
 
-    # 2. Aapke lagaye gaye Secrets se app ko Sign (Lock) karna
+    # 2. AAB ko Sign (Lock) karna
     - name: Sign AAB
-      id: sign_app
+      id: sign_aab
       uses: r0adkll/sign-android-release@v1
       with:
         releaseDirectory: app/build/outputs/bundle/release
@@ -36,9 +36,27 @@ jobs:
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-    # 3. Final AAB file ko upload karna taaki aap download kar sako
-    - name: Upload Signed AAB
+    # 3. APK ko Sign (Lock) karna
+    - name: Sign APK
+      id: sign_apk
+      uses: r0adkll/sign-android-release@v1
+      with:
+        releaseDirectory: app/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+        alias: ${{ secrets.ALIAS }}
+        keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+        keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+    # 4. Play Store wali AAB file upload karna
+    - name: Upload Signed AAB (Play Store)
       uses: actions/upload-artifact@v4
       with:
-        name: BoxBlast-PlayStore-Ready
-        path: ${{steps.sign_app.outputs.signedReleaseFile}}
+        name: BoxBlast-PlayStore-AAB
+        path: ${{steps.sign_aab.outputs.signedReleaseFile}}
+
+    # 5. Free Stores wali APK file upload karna
+    - name: Upload Signed APK (Free Stores)
+      uses: actions/upload-artifact@v4
+      with:
+        name: BoxBlast-FreeStores-APK
+        path: ${{steps.sign_apk.outputs.signedReleaseFile}}
