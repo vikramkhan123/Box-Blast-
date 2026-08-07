@@ -18,6 +18,10 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    # Ye step server par purana tool install karega jo Signing ke liye zaroori hai
+    - name: Install Android Build Tools 29.0.3
+      run: sdkmanager "build-tools;29.0.3"
+
     # 1. Play Store ke liye AAB aur Free Stores ke liye APK generate karna
     - name: Build Release AAB & APK
       run: gradle bundleRelease assembleRelease
@@ -32,9 +36,8 @@ jobs:
         alias: ${{ secrets.ALIAS }}
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
-        buildToolsVersion: 34.0.0
 
-    # 3. APK ko Sign (Lock) karna (Naya Tool Version add kiya)
+    # 3. APK ko Sign (Lock) karna
     - name: Sign APK
       id: sign_apk
       uses: r0adkll/sign-android-release@v1
@@ -44,7 +47,6 @@ jobs:
         alias: ${{ secrets.ALIAS }}
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
-        buildToolsVersion: 34.0.0
 
     # 4. Play Store wali AAB file upload karna
     - name: Upload Signed AAB (Play Store)
