@@ -103,7 +103,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private fun vibratePhone(duration: Long = 50L) { try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") vibrator.vibrate(duration) } catch (e: Exception) { } }
 
     private fun getAvailableGemTypes(): List<Int> {
-        val available = mutableListOf(11) // 10 removed, 11 onwards
+        val available = mutableListOf(11) 
         if (currentLevel >= 2) available.add(12) 
         if (currentLevel >= 5) available.add(13) 
         if (currentLevel >= 15) available.add(14) 
@@ -127,7 +127,6 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
-    // CRASH FIX: Safe loading with minOf boundaries
     private fun loadGame() {
         try {
             val gridStr = prefs.getString("AdvGrid", "")
@@ -161,7 +160,12 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         for (i in 0 until 3) {
             if (trayShapes[i] == null || trayShapes[i]!!.placed) {
                 var safeShape: Shape? = null
-                for (attempt in 0..20) { val testShape = Shape(Array(SHAPES[Random.nextInt(SHAPES.size)].size) { r -> IntArray(SHAPES[Random.nextInt(SHAPES.size)][r].size) { c -> if (SHAPES[Random.nextInt(SHAPES.size)][r][c] == 1) Random.nextInt(1, 6) else 0 } }); if (canFitAnywhere(testShape)) { safeShape = testShape; break } }
+                for (attempt in 0..20) { 
+                    // BUG FIXED HERE!
+                    val rawM = SHAPES.random() 
+                    val testShape = Shape(Array(rawM.size) { r -> IntArray(rawM[r].size) { c -> if (rawM[r][c] == 1) Random.nextInt(1, 6) else 0 } })
+                    if (canFitAnywhere(testShape)) { safeShape = testShape; break } 
+                }
                 if (safeShape == null) safeShape = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
                 
                 if (!isLevelComplete && Random.nextFloat() < 0.4f) {
@@ -336,7 +340,8 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         var firstColorId = 0
         for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
-        val neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
+        var neonColor = getBaseColor(if (firstColorId >= 10) firstColorId - 9 else firstColorId)
+        if (firstColorId >= 10) neonColor = Color.YELLOW 
         neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
     }
@@ -394,7 +399,8 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                     prefs.edit().putInt("CurrentPlayingLevel", currentLevel).apply()
                     if (currentLevel > maxLevel) { maxLevel = currentLevel; prefs.edit().putInt("MaxAdventureLevel", maxLevel).apply() }
                     prefs.edit().putBoolean("AdvSaved", false).apply()
-                    (context as Activity).finish(); return true 
+                    (context as Activity).finish()
+                    return true 
                 }
             }
             if (isWaitingForAd && menuBtnRect.contains(tx, ty)) { 
