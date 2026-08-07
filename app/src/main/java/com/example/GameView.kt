@@ -39,11 +39,12 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private val floatingWords = mutableListOf<FloatingWord>()
 
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(15f, 0f, 0f, 0xFF42E5FF.toInt()) }
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 6f }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
 
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
@@ -99,9 +100,11 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     }
 
     private fun loadGame() {
-        score = prefs.getInt("ClassicScore", 0); hsRewardGiven = prefs.getBoolean("ClassicHSReward", false)
-        val gridStr = prefs.getString("ClassicGrid", "")
-        if (!gridStr.isNullOrEmpty()) { val rows = gridStr.split(";"); for (r in 0 until 8) { val cols = rows[r].split(","); for (c in 0 until 8) grid[r][c] = cols[c].toInt() } }
+        try {
+            score = prefs.getInt("ClassicScore", 0); hsRewardGiven = prefs.getBoolean("ClassicHSReward", false)
+            val gridStr = prefs.getString("ClassicGrid", "")
+            if (!gridStr.isNullOrEmpty()) { val rows = gridStr.split(";"); for (r in 0 until 8) { val cols = rows[r].split(","); if(cols.size >= 8){ for (c in 0 until 8) grid[r][c] = cols[c].toInt() } } }
+        } catch (e: Exception) { restartGame(); return }
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
@@ -119,8 +122,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 trayShapes[i] = safeShape
             }
         }
-        if (width > 0 && height > 0) updateTrayPositions()
-        checkGameOverCondition()
+        if (width > 0 && height > 0) updateTrayPositions(); checkGameOverCondition()
     }
 
     private fun canFitAnywhere(shape: Shape): Boolean { for (r in 0 until 8) for (c in 0 until 8) if (canPlaceShape(shape, r, c)) return true; return false }
@@ -145,7 +147,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     }
 
     private fun drawGlossy3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
-        text3DPaint.textSize = size; text3DPaint.textAlign = align
+        text3DPaint.textSize = size; text3DPaint.textAlign = align; text3DPaint.clearShadowLayer()
         text3DPaint.style = Paint.Style.STROKE; text3DPaint.strokeWidth = size * 0.15f; text3DPaint.strokeJoin = Paint.Join.ROUND
         text3DPaint.color = depthColor; canvas.drawText(text, x, y + size * 0.08f, text3DPaint)
         text3DPaint.style = Paint.Style.FILL; text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
@@ -154,10 +156,10 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private fun drawCoinIcon(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color = 0xFF8B6508.toInt(); canvas.drawCircle(cx, cy + radius * 0.15f, radius, p)
+        p.color = 0xFFB8860B.toInt(); canvas.drawCircle(cx, cy + radius * 0.15f, radius, p)
         p.color = 0xFFFFD700.toInt(); canvas.drawCircle(cx, cy, radius, p)
         p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.2f; p.color = 0xFFDAA520.toInt(); canvas.drawCircle(cx, cy, radius * 0.6f, p)
-        p.style = Paint.Style.FILL; p.color = 0x88FFFFFF.toInt(); canvas.drawOval(RectF(cx - radius*0.4f, cy - radius*0.8f, cx + radius*0.4f, cy - radius*0.2f), p)
+        p.style = Paint.Style.FILL; p.color = 0xAAFFFFFF.toInt(); canvas.drawOval(RectF(cx - radius*0.5f, cy - radius*0.8f, cx + radius*0.5f, cy - radius*0.1f), p)
     }
 
     private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int, size: Float = 45f) {
@@ -198,6 +200,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
         }
 
+        draggingShape?.let { if (canFitHover) drawNeonShadow(canvas, it, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize) }
         for (i in 0 until 3) if (i != draggingShapeIndex) trayShapes[i]?.let { if (!it.placed) drawShape(canvas, it, it.cx, it.cy, trayCellSize) }
         draggingShape?.let { drawShape(canvas, it, it.cx, it.cy, cellSize) }
         
@@ -250,6 +253,14 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private fun drawShape(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) drawGlassy3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c])
+    }
+
+    private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
+        var firstColorId = 0
+        for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
+        val neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
+        neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
     }
 
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
@@ -332,8 +343,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
         if (total > 0) {
             soundManager.playClear(); vibratePhone(100L)
-            val word = soundManager.playComboVoice(total) // AUDIO SYNC FIX
-            floatingWords.add(FloatingWord(word, boardY + boardSize/2f))
+            handler.postDelayed({ val word = soundManager.playComboVoice(total); floatingWords.add(FloatingWord(word, boardY + boardSize/2f)) }, 900)
 
             for (r in rows) { glowLines.add(GlowLine(true, r)); for (c in 0 until 8) { grid[r][c] = 0 }; score += 100 }
             for (c in cols) { glowLines.add(GlowLine(false, c)); for (r in 0 until 8) { grid[r][c] = 0 }; score += 100 }
