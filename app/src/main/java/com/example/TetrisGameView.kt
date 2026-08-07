@@ -57,10 +57,17 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val btnDown = RectF(); private val btnRight = RectF()
     private val restartBtnRect = RectF(); private val menuBtnRect = RectF()
 
+    // 4-BLOCK MULTIPLIED FOR HIGHER CHANCE!
     val SHAPES = listOf(
-        arrayOf(intArrayOf(1, 1, 1, 1)), arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)),
-        arrayOf(intArrayOf(1, 0, 0), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(0, 0, 1), intArrayOf(1, 1, 1)),
-        arrayOf(intArrayOf(0, 1, 1), intArrayOf(1, 1, 0)), arrayOf(intArrayOf(1, 1, 0), intArrayOf(0, 1, 1))
+        arrayOf(intArrayOf(1, 1, 1, 1)), // Horizontal I
+        arrayOf(intArrayOf(1, 1, 1, 1)), // Horizontal I (Extra chance)
+        arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), // Vertical I
+        arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), 
+        arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)), 
+        arrayOf(intArrayOf(1, 0, 0), intArrayOf(1, 1, 1)), 
+        arrayOf(intArrayOf(0, 0, 1), intArrayOf(1, 1, 1)), 
+        arrayOf(intArrayOf(0, 1, 1), intArrayOf(1, 1, 0)), 
+        arrayOf(intArrayOf(1, 1, 0), intArrayOf(0, 1, 1))
     )
 
     class Tetromino(var matrix: Array<IntArray>, val colorId: Int) { var x = 3; var y = 0 }
@@ -95,12 +102,23 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         nextPiece = generatePiece(); spawnPiece(); handler.removeCallbacks(gameLoop); handler.postDelayed(gameLoop, speedMs)
     }
 
+    // CRASH FIX: minOf Boundaries
     private fun loadGame() {
         try {
             score = prefs.getInt("TetrisScore", 0); hsRewardGiven = prefs.getBoolean("TetrisHSReward", false)
             val gridStr = prefs.getString("TetrisGrid", "")
-            if (!gridStr.isNullOrEmpty()) { val rows = gridStr.split(";"); for (r in 0 until ROWS) { val cols = rows[r].split(","); if(cols.size >= COLS){ for (c in 0 until COLS) grid[r][c] = cols[c].toInt() } } }
-        } catch (e: Exception) { restartGame(); return }
+            if (gridStr?.isNotEmpty() == true) { 
+                val rows = gridStr.split(";")
+                for (r in 0 until Math.min(ROWS, rows.size)) { 
+                    val cols = rows[r].split(",")
+                    for (c in 0 until Math.min(COLS, cols.size)) {
+                        grid[r][c] = cols[c].toInt() 
+                    } 
+                } 
+            }
+        } catch (e: Exception) { 
+            e.printStackTrace(); restartGame(); return 
+        }
         nextPiece = generatePiece(); spawnPiece(); handler.removeCallbacks(gameLoop); handler.postDelayed(gameLoop, speedMs)
     }
 
@@ -136,7 +154,6 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         newGameBtnRect.set(cx - bw/2f, resumeBtnRect.bottom + 40f, cx + bw/2f, resumeBtnRect.bottom + 40f + bh)
     }
 
-    // CLAYMATION TEXT
     private fun drawGlossy3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
         text3DPaint.textSize = size; text3DPaint.textAlign = align; text3DPaint.clearShadowLayer()
         text3DPaint.style = Paint.Style.STROKE; text3DPaint.strokeWidth = size * 0.15f; text3DPaint.strokeJoin = Paint.Join.ROUND
@@ -159,12 +176,9 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         drawGlossy3DText(canvas, text, rect.centerX(), rect.centerY() + size/3f, Color.WHITE, Color.DKGRAY, size)
     }
 
-    // MISSING FUNCTION FIXED HERE!
     private fun draw3DControlButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int) {
-        btnPaint.color = bottomColor
-        canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 40f, 40f, btnPaint)
-        btnPaint.color = topColor
-        canvas.drawRoundRect(rect, 40f, 40f, btnPaint)
+        btnPaint.color = bottomColor; canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 40f, 40f, btnPaint)
+        btnPaint.color = topColor; canvas.drawRoundRect(rect, 40f, 40f, btnPaint)
         drawGlossy3DText(canvas, text, rect.centerX(), rect.centerY() + rect.height() * 0.15f, Color.WHITE, Color.DKGRAY, rect.height() * 0.45f)
     }
 
@@ -255,7 +269,8 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         } else if (isGameOver) {
             canvas.drawColor(0xEE000000.toInt())
             if (isNewHighScore) {
-                text3DPaint.textSize = 150f; canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
+                text3DPaint.textSize = 150f; text3DPaint.clearShadowLayer()
+                canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
                 drawGlossy3DText(canvas, "NEW BEST!", width / 2f, boardY + 60f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 100f)
             } else { drawGlossy3DText(canvas, "GAME OVER", width / 2f, boardY + boardSizeH / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f) }
             draw3DButton(canvas, restartBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
@@ -320,11 +335,22 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     private fun moveLeft() { currentPiece?.let { if (isValidPosition(it.matrix, it.x - 1, it.y)) it.x-- } }
     private fun moveRight() { currentPiece?.let { if (isValidPosition(it.matrix, it.x + 1, it.y)) it.x++ } }
+    
+    // CENTER ROTATION LOGIC FIX!
     private fun rotatePiece() {
         currentPiece?.let {
             val r = it.matrix.size; val c = it.matrix[0].size; val newM = Array(c) { IntArray(r) }
             for (i in 0 until r) for (j in 0 until c) newM[j][r - 1 - i] = it.matrix[i][j]
-            if (isValidPosition(newM, it.x, it.y)) { it.matrix = newM; soundManager.playPick() }
+            
+            // Adjust position so it rotates from the center, not top-left corner
+            val offsetX = (c - r) / 2
+            val offsetY = (r - c) / 2
+            
+            if (isValidPosition(newM, it.x + offsetX, it.y + offsetY)) { 
+                it.matrix = newM; it.x += offsetX; it.y += offsetY; soundManager.playPick() 
+            } else if (isValidPosition(newM, it.x, it.y)) { 
+                it.matrix = newM; soundManager.playPick() 
+            }
         }
     }
 
