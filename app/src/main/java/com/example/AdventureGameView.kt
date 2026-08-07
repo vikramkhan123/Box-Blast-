@@ -46,11 +46,12 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private val floatingWords = mutableListOf<FloatingWord>()
 
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(15f, 0f, 0f, 0xFF42E5FF.toInt()) }
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 6f }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
 
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
@@ -102,9 +103,12 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private fun vibratePhone(duration: Long = 50L) { try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") vibrator.vibrate(duration) } catch (e: Exception) { } }
 
     private fun getAvailableGemTypes(): List<Int> {
-        val available = mutableListOf(10) 
-        if (currentLevel >= 2) available.add(11); if (currentLevel >= 4) available.add(12); if (currentLevel >= 8) available.add(13) 
-        if (currentLevel >= 15) available.add(14); if (currentLevel >= 25) available.add(15); if (currentLevel >= 40) available.add(16) 
+        val available = mutableListOf(11) // Star (10) hataya gaya hai, 11 (Diamond) se shuru
+        if (currentLevel >= 2) available.add(12) 
+        if (currentLevel >= 5) available.add(13) 
+        if (currentLevel >= 15) available.add(14) 
+        if (currentLevel >= 25) available.add(15) 
+        if (currentLevel >= 40) available.add(16) 
         val numTypesToUse = minOf(4, 1 + (currentLevel / 5)) 
         return available.shuffled().take(maxOf(1, numTypesToUse))
     }
@@ -124,11 +128,13 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     }
 
     private fun loadGame() {
-        val gridStr = prefs.getString("AdvGrid", "")
-        if (!gridStr.isNullOrEmpty()) { val rows = gridStr.split(";"); for (r in 0 until 8) { val cols = rows[r].split(","); for (c in 0 until 8) grid[r][c] = cols[c].toInt() } }
-        targetGems.clear(); gemsCollected.clear()
-        prefs.getString("AdvGemsColl", "")?.split(";")?.forEach { if(it.isNotEmpty()){ val parts = it.split(":"); gemsCollected[parts[0].toInt()] = parts[1].toInt() } }
-        prefs.getString("AdvTargetGems", "")?.split(";")?.forEach { if(it.isNotEmpty()){ val parts = it.split(":"); targetGems[parts[0].toInt()] = parts[1].toInt() } }
+        try {
+            val gridStr = prefs.getString("AdvGrid", "")
+            if (!gridStr.isNullOrEmpty()) { val rows = gridStr.split(";"); for (r in 0 until 8) { val cols = rows[r].split(","); if(cols.size >= 8){ for (c in 0 until 8) grid[r][c] = cols[c].toInt() } } }
+            targetGems.clear(); gemsCollected.clear()
+            prefs.getString("AdvGemsColl", "")?.split(";")?.forEach { if(it.isNotEmpty()){ val parts = it.split(":"); gemsCollected[parts[0].toInt()] = parts[1].toInt() } }
+            prefs.getString("AdvTargetGems", "")?.split(";")?.forEach { if(it.isNotEmpty()){ val parts = it.split(":"); targetGems[parts[0].toInt()] = parts[1].toInt() } }
+        } catch (e: Exception) { initLevel(); return }
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
@@ -143,7 +149,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         for (i in 0 until 3) {
             if (trayShapes[i] == null || trayShapes[i]!!.placed) {
                 var safeShape: Shape? = null
-                for (attempt in 0..20) { val rawMatrix = SHAPES[Random.nextInt(SHAPES.size)]; val testShape = Shape(Array(rawMatrix.size) { r -> IntArray(rawMatrix[r].size) { c -> if (rawMatrix[r][c] == 1) Random.nextInt(1, 6) else 0 } }); if (canFitAnywhere(testShape)) { safeShape = testShape; break } }
+                for (attempt in 0..20) { val testShape = Shape(Array(SHAPES[Random.nextInt(SHAPES.size)].size) { r -> IntArray(SHAPES[Random.nextInt(SHAPES.size)][r].size) { c -> if (SHAPES[Random.nextInt(SHAPES.size)][r][c] == 1) Random.nextInt(1, 6) else 0 } }); if (canFitAnywhere(testShape)) { safeShape = testShape; break } }
                 if (safeShape == null) safeShape = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
                 if (!isLevelComplete && Random.nextFloat() < 0.4f) {
                     val neededGems = targetGems.filter { (t, target) -> (gemsCollected[t] ?: 0) < target }.keys.toList()
@@ -159,7 +165,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        boardSize = w - 60f; cellSize = boardSize / 8; boardX = 30f; boardY = 260f
+        boardSize = w - 60f; cellSize = boardSize / 8; boardX = 30f; boardY = 280f
         trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f
         val bw = 600f; val bh = 130f; val cx = w/2f
         restartBtnRect.set(cx - bw/2f, boardY + boardSize/2f + 40f, cx + bw/2f, boardY + boardSize/2f + 40f + bh)
@@ -176,9 +182,9 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         for (i in 0 until 3) trayShapes[i]?.let { if (!it.placed) { it.cx = (i * sectionWidth) + (sectionWidth - (it.cols * trayCellSize)) / 2f; it.cy = trayY + (sectionWidth - (it.rows * trayCellSize)) / 2f } }
     }
 
-    // CLAYMATION TEXT: Thick stroke + Fill + Gloss Highlight
+    // CLAYMATION 3D TEXT
     private fun drawGlossy3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
-        text3DPaint.textSize = size; text3DPaint.textAlign = align
+        text3DPaint.textSize = size; text3DPaint.textAlign = align; text3DPaint.clearShadowLayer()
         text3DPaint.style = Paint.Style.STROKE; text3DPaint.strokeWidth = size * 0.15f; text3DPaint.strokeJoin = Paint.Join.ROUND
         text3DPaint.color = depthColor; canvas.drawText(text, x, y + size * 0.08f, text3DPaint)
         text3DPaint.style = Paint.Style.FILL; text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
@@ -187,10 +193,10 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     private fun drawCoinIcon(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color = 0xFF8B6508.toInt(); canvas.drawCircle(cx, cy + radius * 0.15f, radius, p)
+        p.color = 0xFFB8860B.toInt(); canvas.drawCircle(cx, cy + radius * 0.15f, radius, p)
         p.color = 0xFFFFD700.toInt(); canvas.drawCircle(cx, cy, radius, p)
         p.style = Paint.Style.STROKE; p.strokeWidth = radius * 0.2f; p.color = 0xFFDAA520.toInt(); canvas.drawCircle(cx, cy, radius * 0.6f, p)
-        p.style = Paint.Style.FILL; p.color = 0x88FFFFFF.toInt(); canvas.drawOval(RectF(cx - radius*0.4f, cy - radius*0.8f, cx + radius*0.4f, cy - radius*0.2f), p)
+        p.style = Paint.Style.FILL; p.color = 0xAAFFFFFF.toInt(); canvas.drawOval(RectF(cx - radius*0.5f, cy - radius*0.8f, cx + radius*0.5f, cy - radius*0.1f), p)
     }
 
     private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int, size: Float = 45f) {
@@ -203,13 +209,13 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         super.onDraw(canvas)
         canvas.drawColor(Color.TRANSPARENT)
 
-        drawGlossy3DText(canvas, "LEVEL $currentLevel", width/2f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 65f)
+        drawGlossy3DText(canvas, "LEVEL $currentLevel", width/2f, 90f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 65f)
         
         val currentCoins = prefs.getInt("BoxBlastCoins", 0)
-        drawCoinIcon(canvas, width - 150f, 80f, 25f)
-        drawGlossy3DText(canvas, "$currentCoins", width - 110f, 95f, Color.YELLOW, 0xFF8B6508.toInt(), 45f, Paint.Align.LEFT)
+        drawCoinIcon(canvas, width - 150f, 70f, 25f)
+        drawGlossy3DText(canvas, "$currentCoins", width - 110f, 85f, Color.YELLOW, 0xFF8B6508.toInt(), 45f, Paint.Align.LEFT)
 
-        // UI OVERLAP FIX: Proper Spacing & Text below icon
+        // TARGET UI ALIGNMENT FIX (No Overlap)
         val typesList = targetGems.keys.toList()
         val spacing = width / (typesList.size + 1).toFloat()
         typesList.forEachIndexed { index, type ->
@@ -238,7 +244,8 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
         }
 
-        draggingShape?.let { if (canFitHover) drawGlassy3DBlock(canvas, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize, 0) } // Simple hover
+        // HOVER SHADOW RESTORED
+        draggingShape?.let { if (canFitHover) drawNeonShadow(canvas, it, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize) } 
         for (i in 0 until 3) if (i != draggingShapeIndex) trayShapes[i]?.let { if (!it.placed) drawShape(canvas, it, it.cx, it.cy, trayCellSize) }
         draggingShape?.let { drawShape(canvas, it, it.cx, it.cy, cellSize) }
 
@@ -316,6 +323,15 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) drawGlassy3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c])
     }
 
+    private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
+        var firstColorId = 0
+        for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
+        var neonColor = getBaseColor(if (firstColorId >= 10) firstColorId - 9 else firstColorId)
+        if (firstColorId >= 10) neonColor = Color.YELLOW 
+        neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
+    }
+
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
         val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
         val baseColor = getBaseColor(if (colorId >= 10) (colorId - 9) else colorId)
@@ -327,36 +343,29 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         if (colorId >= 10) drawGemShape(canvas, x + size * 0.15f, y + size * 0.15f, size * 0.7f, colorId)
     }
 
-    private fun adjustColorLightness(color: Int, factor: Float): Int {
-        val hsv = FloatArray(3); Color.colorToHSV(color, hsv); hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f); return Color.HSVToColor(hsv)
-    }
+    private fun adjustColorLightness(color: Int, factor: Float): Int { val hsv = FloatArray(3); Color.colorToHSV(color, hsv); hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f); return Color.HSVToColor(hsv) }
 
-    // CLAYMATION GEM (Thick Stroke Outline + Gloss Highlight)
+    // CLAYMATION GEM (Solid offset instead of Drop Shadow)
     private fun drawGemShape(canvas: Canvas, x: Float, y: Float, size: Float, type: Int) {
         val cx = x + size / 2f; val cy = y + size / 2f; val path = Path()
         var colors = intArrayOf(0xFFFFFFA0.toInt(), 0xFFFFD700.toInt(), 0xFFE65C00.toInt())
         when(type) {
-            10 -> { val outR = size / 2f; val inR = outR / 2.2f
-                for (i in 0 until 10) { val angle = i * (Math.PI / 5) - (Math.PI / 2); val r = if (i % 2 == 0) outR else inR
-                    if (i == 0) path.moveTo(cx + cos(angle).toFloat() * r, cy + sin(angle).toFloat() * r) else path.lineTo(cx + cos(angle).toFloat() * r, cy + sin(angle).toFloat() * r)
-                }
-                path.close() }
-            11 -> { colors = intArrayOf(0xFFD4F1F9.toInt(), 0xFF00E5FF.toInt(), 0xFF0055FF.toInt()); path.moveTo(cx, y); path.lineTo(x + size, cy); path.lineTo(cx, y + size); path.lineTo(x, cy); path.close() }
+            10, 11 -> { colors = intArrayOf(0xFFD4F1F9.toInt(), 0xFF00E5FF.toInt(), 0xFF0055FF.toInt()); path.moveTo(cx, y); path.lineTo(x + size, cy); path.lineTo(cx, y + size); path.lineTo(x, cy); path.close() }
             12 -> { colors = intArrayOf(0xFFF9D4F1.toInt(), 0xFFFF00FF.toInt(), 0xFF8B008B.toInt()); for (i in 0 until 6) { val angle = i * (Math.PI / 3); val px = cx + cos(angle).toFloat() * (size/2f); val py = cy + sin(angle).toFloat() * (size/2f); if (i == 0) path.moveTo(px, py) else path.lineTo(px, py) }; path.close() }
             13 -> { colors = intArrayOf(0xFFFFB6C1.toInt(), 0xFFFF0040.toInt(), 0xFF8B0000.toInt()); path.moveTo(cx, y + size/4); path.cubicTo(x, y - size/4, x - size/2, cy, cx, y + size); path.moveTo(cx, y + size/4); path.cubicTo(x + size, y - size/4, x + size + size/2, cy, cx, y + size) }
             14 -> { colors = intArrayOf(0xFFD4F9D4.toInt(), 0xFF00FF00.toInt(), 0xFF008000.toInt()); path.moveTo(cx, y + size * 0.1f); path.lineTo(x + size * 0.9f, y + size * 0.9f); path.lineTo(x + size * 0.1f, y + size * 0.9f); path.close() }
             15 -> { colors = intArrayOf(0xFFFFE4B5.toInt(), 0xFFFFA500.toInt(), 0xFFFF4500.toInt()); for (i in 0 until 5) { val angle = i * (Math.PI * 2 / 5) - (Math.PI / 2); val px = cx + cos(angle).toFloat() * (size / 2f); val py = cy + sin(angle).toFloat() * (size / 2f); if (i == 0) path.moveTo(px, py) else path.lineTo(px, py) }; path.close() }
             16 -> { colors = intArrayOf(0xFFFFFFFF.toInt(), 0xFFC0C0C0.toInt(), 0xFF808080.toInt()); path.addCircle(cx, cy, size / 2.2f, Path.Direction.CW) }
         }
-        val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x88000000.toInt(); style = Paint.Style.STROKE; strokeWidth = size * 0.15f; strokeJoin = Paint.Join.ROUND }
-        canvas.drawPath(path, outlinePaint) 
+        val depthPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66000000.toInt(); style = Paint.Style.FILL }
+        canvas.save(); canvas.translate(0f, size * 0.1f); canvas.drawPath(path, depthPaint); canvas.restore() 
         val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = RadialGradient(cx, cy, size/2f, colors, null, Shader.TileMode.CLAMP); style = Paint.Style.FILL }
         canvas.drawPath(path, starPaint)
         val glossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAAFFFFFF.toInt(); style = Paint.Style.FILL }
         canvas.drawOval(cx - size*0.2f, cy - size*0.4f, cx + size*0.2f, cy - size*0.1f, glossPaint)
     }
 
-    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); 6 -> 0xFF00FF00.toInt(); 7 -> 0xFFFFA500.toInt(); else -> 0xFFFFFFFF.toInt() }
+    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); else -> 0xFFFFFFFF.toInt() }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val tx = event.x; val ty = event.y
@@ -368,12 +377,18 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             }
             if (!isGameOver && !showResumePopup && !isWaitingForAd && !isLevelComplete && shuffleBtnRect.contains(tx, ty)) {
                 if (useCoinsOrFreeShuffle()) { soundManager.playBtnClick(); for(i in 0 until 3) trayShapes[i] = null; fillTray() } 
-                // NO SOUND PLAYED IF INSUFFICIENT COINS
                 return true
             }
             if (isLevelComplete) {
                 if (restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); currentLevel++; prefs.edit().putInt("CurrentPlayingLevel", currentLevel).apply(); if (currentLevel > maxLevel) { maxLevel = currentLevel; prefs.edit().putInt("MaxAdventureLevel", maxLevel).apply() }; initLevel(); return true }
-                if (menuBtnRect.contains(tx, ty)) { prefs.edit().putBoolean("AdvSaved", false).apply(); (context as Activity).finish(); return true }
+                if (menuBtnRect.contains(tx, ty)) { 
+                    soundManager.playBtnClick(); currentLevel++
+                    prefs.edit().putInt("CurrentPlayingLevel", currentLevel).apply()
+                    if (currentLevel > maxLevel) { maxLevel = currentLevel; prefs.edit().putInt("MaxAdventureLevel", maxLevel).apply() }
+                    prefs.edit().putBoolean("AdvSaved", false).apply()
+                    (context as Activity).finish()
+                    return true 
+                }
             }
             if (isWaitingForAd && menuBtnRect.contains(tx, ty)) { 
                 soundManager.playBtnClick(); soundManager.stopCountdownTick(); handler.removeCallbacks(timerRunnable)
@@ -424,15 +439,9 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         return true
     }
 
-    private fun canPlaceShape(shape: Shape, rOff: Int, cOff: Int): Boolean {
-        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0 && (rOff + r !in 0..7 || cOff + c !in 0..7 || grid[rOff + r][cOff + c] != 0)) return false
-        return true
-    }
+    private fun canPlaceShape(shape: Shape, rOff: Int, cOff: Int): Boolean { for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0 && (rOff + r !in 0..7 || cOff + c !in 0..7 || grid[rOff + r][cOff + c] != 0)) return false; return true }
 
-    private fun placeShape(shape: Shape, rOff: Int, cOff: Int) {
-        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) grid[rOff + r][cOff + c] = shape.matrix[r][c]
-        checkLines()
-    }
+    private fun placeShape(shape: Shape, rOff: Int, cOff: Int) { for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) grid[rOff + r][cOff + c] = shape.matrix[r][c]; checkLines() }
 
     private fun checkLines() {
         val rows = mutableListOf<Int>(); val cols = mutableListOf<Int>()
@@ -442,8 +451,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
         if (total > 0) {
             soundManager.playClear(); vibratePhone(100L) 
-            val word = soundManager.playComboVoice(total) // MATCHING AUDIO AND TEXT
-            floatingWords.add(FloatingWord(word, boardY + boardSize/2f))
+            handler.postDelayed({ val word = soundManager.playComboVoice(total); floatingWords.add(FloatingWord(word, boardY + boardSize/2f)) }, 900)
 
             for (r in rows) { glowLines.add(GlowLine(true, r)); for (c in 0 until 8) { val id = grid[r][c]; if (id>=10) flyingGems.add(FlyingGem(boardX+c*cellSize, boardY+r*cellSize, id)); grid[r][c] = 0 } }
             for (c in cols) { glowLines.add(GlowLine(false, c)); for (r in 0 until 8) { val id = grid[r][c]; if (id>=10) flyingGems.add(FlyingGem(boardX+c*cellSize, boardY+r*cellSize, id)); grid[r][c] = 0 } }
@@ -453,10 +461,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private fun checkGameOverCondition() {
         if (isLevelComplete) return
         var canMakeMove = false
-        for (shape in trayShapes) if (shape != null && !shape.placed) {
-            for (r in 0 until 8) for (c in 0 until 8) if (canPlaceShape(shape, r, c)) { canMakeMove = true; break }
-            if (canMakeMove) break
-        }
+        for (shape in trayShapes) if (shape != null && !shape.placed) { for (r in 0 until 8) for (c in 0 until 8) if (canPlaceShape(shape, r, c)) { canMakeMove = true; break }; if (canMakeMove) break }
         if (!canMakeMove) { isWaitingForAd = true; adCountdown = 10; handler.post(timerRunnable); invalidate() }
     }
 
