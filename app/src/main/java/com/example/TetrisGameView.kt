@@ -59,15 +59,11 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     // 4-BLOCK MULTIPLIED FOR HIGHER CHANCE!
     val SHAPES = listOf(
-        arrayOf(intArrayOf(1, 1, 1, 1)), // Horizontal I
-        arrayOf(intArrayOf(1, 1, 1, 1)), // Horizontal I (Extra chance)
-        arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), // Vertical I
-        arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), 
-        arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)), 
-        arrayOf(intArrayOf(1, 0, 0), intArrayOf(1, 1, 1)), 
-        arrayOf(intArrayOf(0, 0, 1), intArrayOf(1, 1, 1)), 
-        arrayOf(intArrayOf(0, 1, 1), intArrayOf(1, 1, 0)), 
-        arrayOf(intArrayOf(1, 1, 0), intArrayOf(0, 1, 1))
+        arrayOf(intArrayOf(1, 1, 1, 1)), arrayOf(intArrayOf(1, 1, 1, 1)), arrayOf(intArrayOf(1, 1, 1, 1)), 
+        arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), 
+        arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)),
+        arrayOf(intArrayOf(1, 0, 0), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(0, 0, 1), intArrayOf(1, 1, 1)),
+        arrayOf(intArrayOf(0, 1, 1), intArrayOf(1, 1, 0)), arrayOf(intArrayOf(1, 1, 0), intArrayOf(0, 1, 1))
     )
 
     class Tetromino(var matrix: Array<IntArray>, val colorId: Int) { var x = 3; var y = 0 }
@@ -127,7 +123,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         prefs.edit().putBoolean("TetrisSaved", true).putInt("TetrisScore", score).putBoolean("TetrisHSReward", hsRewardGiven).putString("TetrisGrid", grid.joinToString(";") { it.joinToString(",") }).apply()
     }
 
-    private fun generatePiece(): Tetromino { val matrix = SHAPES[Random.nextInt(SHAPES.size)]; return Tetromino(Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }, Random.nextInt(1, 6)) }
+    private fun generatePiece(): Tetromino { val matrix = SHAPES.random(); return Tetromino(Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }, Random.nextInt(1, 6)) }
 
     private fun spawnPiece() {
         currentPiece = nextPiece; nextPiece = generatePiece()
@@ -335,14 +331,11 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     private fun moveLeft() { currentPiece?.let { if (isValidPosition(it.matrix, it.x - 1, it.y)) it.x-- } }
     private fun moveRight() { currentPiece?.let { if (isValidPosition(it.matrix, it.x + 1, it.y)) it.x++ } }
-    
-    // CENTER ROTATION LOGIC FIX!
     private fun rotatePiece() {
         currentPiece?.let {
             val r = it.matrix.size; val c = it.matrix[0].size; val newM = Array(c) { IntArray(r) }
             for (i in 0 until r) for (j in 0 until c) newM[j][r - 1 - i] = it.matrix[i][j]
             
-            // Adjust position so it rotates from the center, not top-left corner
             val offsetX = (c - r) / 2
             val offsetY = (r - c) / 2
             
