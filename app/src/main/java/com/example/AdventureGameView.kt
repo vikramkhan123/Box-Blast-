@@ -172,7 +172,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         super.onSizeChanged(w, h, oldw, oldh)
         val padding = 30f 
         boardSize = w - padding * 2; cellSize = boardSize / 8; boardX = padding; boardY = padding + 250f
-        trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f; targetUiX = w / 2f
+        trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f
         val bw = 600f; val bh = 140f
         centerBtnRect.set(w/2f - bw/2f, boardY + boardSize/2f + 80f, w/2f + bw/2f, boardY + boardSize/2f + 80f + bh)
         updateTrayPositions()
