@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 <uses-permission android:name="android.permission.VIBRATE" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -12,12 +15,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
         
-        <!-- Google AdMob Test App ID -->
-<meta-data
-    android:name="com.google.android.gms.ads.APPLICATION_ID"
-    android:value="ca-app-pub-3940256099942544~3347511713"/>
+        <!-- Aapki ORIGINAL Google AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-4346513942475662~8153382794"/>
 
-<activity android:name=".LevelSelectionActivity" />
+        <activity android:name=".LevelSelectionActivity" />
         <!-- Main Menu Activity -->
         <activity
             android:name=".MainActivity"
@@ -30,18 +33,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Nayi Classic Game Activity -->
         <activity
             android:name=".ClassicGameActivity"
             android:theme="@style/Theme.MyApplication"
             android:screenOrientation="portrait" />
         
-        <!-- Adventure Game Activity -->
         <activity
             android:name=".AdventureGameActivity"
             android:theme="@style/Theme.MyApplication"
             android:screenOrientation="portrait" />
-                <!-- Tetris Game Activity -->
+            
         <activity
             android:name=".TetrisGameActivity"
             android:theme="@style/Theme.MyApplication"
