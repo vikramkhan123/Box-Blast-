@@ -99,25 +99,25 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
-    // CRASH FIX: Safe loading with minOf boundary checks
+    // CRASH FIX: Safe loading with minOf boundaries and toIntOrNull
     private fun loadGame() {
         try {
             score = prefs.getInt("ClassicScore", 0)
             hsRewardGiven = prefs.getBoolean("ClassicHSReward", false)
             val gridStr = prefs.getString("ClassicGrid", "")
-            if (gridStr?.isNotEmpty() == true) {
+            if (!gridStr.isNullOrEmpty()) {
                 val rows = gridStr.split(";")
-                for (r in 0 until Math.min(8, rows.size)) {
+                for (r in 0 until minOf(8, rows.size)) {
                     val cols = rows[r].split(",")
-                    for (c in 0 until Math.min(8, cols.size)) {
-                        grid[r][c] = cols[c].toInt()
+                    for (c in 0 until minOf(8, cols.size)) {
+                        grid[r][c] = cols[c].toIntOrNull() ?: 0
                     }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
-            score = 0
+            restartGame() // Agar save corrupt hai, toh naya game safely chal jayega
+            return
         }
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
@@ -131,7 +131,11 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         for (i in 0 until 3) {
             if (trayShapes[i] == null || trayShapes[i]!!.placed) {
                 var safeShape: Shape? = null
-                for (attempt in 0..20) { val testShape = Shape(Array(SHAPES[Random.nextInt(SHAPES.size)].size) { r -> IntArray(SHAPES[Random.nextInt(SHAPES.size)][r].size) { c -> if (SHAPES[Random.nextInt(SHAPES.size)][r][c] == 1) Random.nextInt(1, 6) else 0 } }); if (canFitAnywhere(testShape)) { safeShape = testShape; break } }
+                for (attempt in 0..20) { 
+                    val rawM = SHAPES.random()
+                    val testShape = Shape(Array(rawM.size) { r -> IntArray(rawM[r].size) { c -> if (rawM[r][c] == 1) Random.nextInt(1, 6) else 0 } })
+                    if (canFitAnywhere(testShape)) { safeShape = testShape; break } 
+                }
                 if (safeShape == null) safeShape = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
                 trayShapes[i] = safeShape
             }
@@ -256,7 +260,8 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         } else if (isGameOver) {
             canvas.drawColor(0xEE000000.toInt())
             if (isNewHighScore) {
-                text3DPaint.textSize = 150f; canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
+                text3DPaint.textSize = 150f; text3DPaint.clearShadowLayer()
+                canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
                 drawGlossy3DText(canvas, "NEW BEST!", width / 2f, boardY + 60f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 100f)
             } else { drawGlossy3DText(canvas, "GAME OVER", width / 2f, boardY + boardSize / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f) }
             draw3DButton(canvas, restartBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
