@@ -1,5 +1,6 @@
 package com.example
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.*
 import android.os.Build
@@ -23,30 +24,41 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val grid = Array(ROWS) { IntArray(COLS) { 0 } }
     
     private var score = 0; private var speedMs = 600L
-    private var highScore = prefs.getInt("TetrisHighScore", 0) // HIGH SCORE
+    private var highScore = prefs.getInt("TetrisHighScore", 0) 
+    private var coins = prefs.getInt("BoxBlastCoins", 0)
     
     private var isGameOver = false; private var isWaitingForAd = false; private var adCountdown = 10 
+    private var isNewHighScore = false
+
+    // Save/Resume State
+    private var showResumePopup = false
+    private val resumeBtnRect = RectF(); private val newGameBtnRect = RectF()
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
+    data class Confetti(var x: Float, var y: Float, var vx: Float, var vy: Float, val color: Int, var size: Float, var rot: Float, var rotSpeed: Float)
+    private val confettis = mutableListOf<Confetti>()
+    data class GlowLine(val isRow: Boolean, val index: Int, var alpha: Float = 1f)
+    private val glowLines = mutableListOf<GlowLine>()
+    data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
+    private val floatingWords = mutableListOf<FloatingWord>()
 
     private val neonBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(15f, 0f, 0f, 0xFF42E5FF.toInt()) }
-    
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
-
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
 
     private var cellSize = 0f; private var boardSizeW = 0f; private var boardSizeH = 0f
     private var boardX = 0f; private var boardY = 0f
 
     private val btnLeft = RectF(); private val btnRotate = RectF()
     private val btnDown = RectF(); private val btnRight = RectF()
-    private val centerBtnRect = RectF()
+    private val restartBtnRect = RectF(); private val menuBtnRect = RectF()
 
     val SHAPES = listOf(
         arrayOf(intArrayOf(1, 1, 1, 1)), arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)),
@@ -58,40 +70,61 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private var currentPiece: Tetromino? = null; private var nextPiece: Tetromino? = null
 
     private val gameLoop = object : Runnable {
-        override fun run() { if (!isGameOver && !isWaitingForAd) { moveDown(); invalidate(); handler.postDelayed(this, speedMs) } }
+        override fun run() { if (!isGameOver && !isWaitingForAd && !showResumePopup) { moveDown(); invalidate(); handler.postDelayed(this, speedMs) } }
     }
     private val renderLoop = object : Runnable { override fun run() { invalidate(); handler.postDelayed(this, 16L) } }
     
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
-                soundManager.playCountdownTick()
-                adCountdown--
-                if (adCountdown == 0) { 
-                    isWaitingForAd = false; isGameOver = true
-                    soundManager.stopCountdownTick() // Timer stop
-                    soundManager.playGameOver() // PLAY GAME OVER HERE
-                } else {
-                    handler.postDelayed(this, 1000L)
-                }
+                soundManager.playCountdownTick(); adCountdown--
+                if (adCountdown == 0) { isWaitingForAd = false; isGameOver = true; soundManager.stopCountdownTick(); soundManager.playGameOver(); checkAndTriggerConfetti() } 
+                else handler.postDelayed(this, 1000L)
                 invalidate()
             }
         }
     }
 
-    init { nextPiece = generatePiece(); spawnPiece(); handler.postDelayed(gameLoop, speedMs); handler.post(renderLoop) }
-
-    private fun vibratePhone(duration: Long = 50L) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
-            else @Suppress("DEPRECATION") vibrator.vibrate(duration)
-        } catch (e: Exception) { }
+    init { 
+        if (prefs.getBoolean("TetrisSaved", false)) showResumePopup = true else restartGame()
+        handler.post(renderLoop) 
     }
 
-    private fun generatePiece(): Tetromino {
-        val matrix = SHAPES[Random.nextInt(SHAPES.size)]
-        return Tetromino(Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }, Random.nextInt(1, 6))
+    private fun addCoins(amount: Int) { coins += amount; prefs.edit().putInt("BoxBlastCoins", coins).apply() }
+
+    private fun vibratePhone(duration: Long = 50L) { try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") vibrator.vibrate(duration) } catch (e: Exception) { } }
+
+    private fun restartGame() {
+        for (r in 0 until ROWS) for (c in 0 until COLS) grid[r][c] = 0
+        score = 0; speedMs = 600L; isGameOver = false; isWaitingForAd = false; adCountdown = 10; isNewHighScore = false
+        particles.clear(); glowLines.clear(); floatingWords.clear(); confettis.clear()
+        prefs.edit().putBoolean("TetrisSaved", false).apply()
+        nextPiece = generatePiece(); spawnPiece(); handler.removeCallbacks(gameLoop); handler.postDelayed(gameLoop, speedMs)
     }
+
+    private fun loadGame() {
+        score = prefs.getInt("TetrisScore", 0)
+        val gridStr = prefs.getString("TetrisGrid", "")
+        if (!gridStr.isNullOrEmpty()) {
+            val rows = gridStr.split(";")
+            for (r in 0 until ROWS) {
+                val cols = rows[r].split(",")
+                for (c in 0 until COLS) grid[r][c] = cols[c].toInt()
+            }
+        }
+        nextPiece = generatePiece(); spawnPiece(); handler.removeCallbacks(gameLoop); handler.postDelayed(gameLoop, speedMs)
+    }
+
+    private fun saveGame() {
+        if (isGameOver || showResumePopup || isWaitingForAd) return
+        prefs.edit()
+            .putBoolean("TetrisSaved", true)
+            .putInt("TetrisScore", score)
+            .putString("TetrisGrid", grid.joinToString(";") { it.joinToString(",") })
+            .apply()
+    }
+
+    private fun generatePiece(): Tetromino { val matrix = SHAPES[Random.nextInt(SHAPES.size)]; return Tetromino(Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }, Random.nextInt(1, 6)) }
 
     private fun spawnPiece() {
         currentPiece = nextPiece; nextPiece = generatePiece()
@@ -104,22 +137,19 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         super.onSizeChanged(w, h, oldw, oldh)
         val padding = w * 0.15f; boardSizeW = w - padding * 2; cellSize = boardSizeW / COLS
         boardSizeH = cellSize * ROWS; boardX = padding; boardY = 200f
-        val controlCenterY = boardY + boardSizeH + 180f; val controlCenterX = w / 2f
+        val controlCenterY = boardY + boardSizeH + 180f; val cx = w / 2f
         val btnSize = 150f; val gap = 25f
-        btnRotate.set(controlCenterX - btnSize/2, controlCenterY - btnSize - gap, controlCenterX + btnSize/2, controlCenterY - gap)
-        btnLeft.set(controlCenterX - btnSize - btnSize/2 - gap, controlCenterY, controlCenterX - btnSize/2 - gap, controlCenterY + btnSize)
-        btnDown.set(controlCenterX - btnSize/2, controlCenterY, controlCenterX + btnSize/2, controlCenterY + btnSize)
-        btnRight.set(controlCenterX + btnSize/2 + gap, controlCenterY, controlCenterX + btnSize + btnSize/2 + gap, controlCenterY + btnSize)
-        centerBtnRect.set(w/2f - 300f, height/2f + 50f, w/2f + 300f, height/2f + 190f)
-    }
-
-    private fun drawGeminiBackground(canvas: Canvas) {
-        canvas.drawColor(0xFF0F172A.toInt()) 
-        val time = System.currentTimeMillis()
-        neonBgPaint.shader = RadialGradient(width / 2f + Math.sin(time / 2000.0).toFloat() * 250f, height / 3f + Math.cos(time / 1500.0).toFloat() * 250f, 800f, intArrayOf(0x66E94560, 0x00E94560), null, Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), neonBgPaint)
-        neonBgPaint.shader = RadialGradient(width / 2f + Math.cos(time / 1800.0).toFloat() * 300f, height / 1.5f + Math.sin(time / 2200.0).toFloat() * 300f, 900f, intArrayOf(0x660F80FF, 0x000F80FF), null, Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), neonBgPaint)
+        btnRotate.set(cx - btnSize/2, controlCenterY - btnSize - gap, cx + btnSize/2, controlCenterY - gap)
+        btnLeft.set(cx - btnSize - btnSize/2 - gap, controlCenterY, cx - btnSize/2 - gap, controlCenterY + btnSize)
+        btnDown.set(cx - btnSize/2, controlCenterY, cx + btnSize/2, controlCenterY + btnSize)
+        btnRight.set(cx + btnSize/2 + gap, controlCenterY, cx + btnSize + btnSize/2 + gap, controlCenterY + btnSize)
+        
+        val bw = 600f; val bh = 130f
+        restartBtnRect.set(cx - bw/2f, boardY + boardSizeH/2f - 40f, cx + bw/2f, boardY + boardSizeH/2f - 40f + bh)
+        menuBtnRect.set(cx - bw/2f, restartBtnRect.bottom + 30f, cx + bw/2f, restartBtnRect.bottom + 30f + bh)
+        
+        resumeBtnRect.set(cx - bw/2f, boardY + boardSizeH/2f - 60f, cx + bw/2f, boardY + boardSizeH/2f - 60f + bh)
+        newGameBtnRect.set(cx - bw/2f, resumeBtnRect.bottom + 40f, cx + bw/2f, resumeBtnRect.bottom + 40f + bh)
     }
 
     private fun draw3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
@@ -128,39 +158,46 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
     }
 
-    private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int) {
+    private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int, size: Float = 45f) {
         btnPaint.color = bottomColor
         canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 30f, 30f, btnPaint)
         btnPaint.color = topColor
         canvas.drawRoundRect(rect, 30f, 30f, btnPaint)
-        text3DPaint.textSize = 45f; text3DPaint.color = Color.WHITE; text3DPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(text, rect.centerX(), rect.centerY() + 15f, text3DPaint)
+        text3DPaint.textSize = size; text3DPaint.color = Color.WHITE; text3DPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText(text, rect.centerX(), rect.centerY() + size/3f, text3DPaint)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        drawGeminiBackground(canvas)
+        canvas.drawColor(Color.TRANSPARENT)
 
-        // HIGH SCORE UI
-        draw3DText(canvas, "SCORE", boardX + 60f, 80f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 40f, Paint.Align.LEFT)
-        draw3DText(canvas, "$score", boardX + 60f, 125f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.LEFT)
+        draw3DText(canvas, "SCORE", boardX + 40f, 70f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 40f, Paint.Align.LEFT)
+        draw3DText(canvas, "$score", boardX + 40f, 120f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.LEFT)
+        draw3DText(canvas, "BEST", width/2f, 70f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f, Paint.Align.CENTER)
+        draw3DText(canvas, "$highScore", width/2f, 120f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.CENTER)
         
-        draw3DText(canvas, "BEST", width/2f, 80f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f, Paint.Align.CENTER)
-        draw3DText(canvas, "$highScore", width/2f, 125f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.CENTER)
-
-        val nextTitleX = boardX + boardSizeW - 60f
-        draw3DText(canvas, "NEXT", nextTitleX, 80f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f)
+        draw3DText(canvas, "NEXT", boardX + boardSizeW - 80f, 140f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 30f)
         
         nextPiece?.let { piece ->
-            val previewSize = cellSize * 0.7f
+            val previewSize = cellSize * 0.5f
             for (r in 0 until piece.matrix.size) for (c in 0 until piece.matrix[0].size) 
-                if (piece.matrix[r][c] != 0) drawGlassy3DBlock(canvas, nextTitleX - (piece.matrix[0].size*previewSize)/2f + c * previewSize, 100f + r * previewSize, previewSize, piece.colorId)
+                if (piece.matrix[r][c] != 0) drawGlassy3DBlock(canvas, boardX + boardSizeW - 120f + c * previewSize, 160f + r * previewSize, previewSize, piece.colorId)
         }
+
+        draw3DText(canvas, "🪙 $coins", width/2f, 180f, Color.YELLOW, Color.DKGRAY, 35f)
 
         val rect = RectF(boardX, boardY, boardX + boardSizeW, boardY + boardSizeH)
         canvas.drawRoundRect(rect, 20f, 20f, boardPaint)
         canvas.drawRoundRect(rect, 20f, 20f, boardBorderPaint)
 
+        val iteratorGlow = glowLines.iterator()
+        while(iteratorGlow.hasNext()) {
+            val glow = iteratorGlow.next(); glowPaint.alpha = (glow.alpha * 200).toInt()
+            if (glow.isRow) canvas.drawRoundRect(RectF(boardX, boardY + glow.index * cellSize, boardX + boardSizeW, boardY + (glow.index+1)*cellSize), 12f, 12f, glowPaint)
+            glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
+        }
+
+        val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
         for (r in 0 until ROWS) for (c in 0 until COLS) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
             canvas.drawRoundRect(RectF(cx + 2, cy + 2, cx + cellSize - 2, cy + cellSize - 2), 8f, 8f, emptyPaint)
@@ -177,6 +214,15 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         draw3DControlButton(canvas, btnDown, "▼", 0xFFE63946.toInt(), 0xFF9B2226.toInt())
         draw3DControlButton(canvas, btnRight, "▶", 0xFF2DC653.toInt(), 0xFF1B4332.toInt())
 
+        val iteratorWords = floatingWords.iterator()
+        while(iteratorWords.hasNext()) {
+            val fw = iteratorWords.next()
+            if (fw.scale < 1f) fw.scale += 0.05f; fw.y -= 3f; fw.alpha -= 0.02f
+            canvas.save(); canvas.scale(fw.scale, fw.scale, width/2f, fw.y)
+            draw3DText(canvas, fw.text, width/2f, fw.y, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 100f)
+            canvas.restore(); if (fw.alpha <= 0) iteratorWords.remove()
+        }
+
         if (particles.isNotEmpty()) {
             val iterator = particles.iterator(); val pPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
             while (iterator.hasNext()) {
@@ -187,15 +233,35 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             }
         }
 
-        if (isWaitingForAd) {
+        if (showResumePopup) {
+            canvas.drawColor(0xEE000000.toInt())
+            draw3DText(canvas, "GAME SAVED", width / 2f, boardY + boardSizeH / 2f - 160f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 80f)
+            draw3DButton(canvas, resumeBtnRect, "RESUME", 0xFF2CD04E.toInt(), 0xFF147A29.toInt())
+            draw3DButton(canvas, newGameBtnRect, "NEW GAME", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
+        } else if (isWaitingForAd) {
             canvas.drawColor(0xDD000000.toInt())
-            draw3DText(canvas, "NO MOVES", width / 2f, height / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 90f)
-            draw3DText(canvas, "$adCountdown", width / 2f, height / 2f, Color.WHITE, Color.DKGRAY, 150f)
-            draw3DButton(canvas, centerBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF42E5FF.toInt(), 0xFF0055FF.toInt())
+            draw3DText(canvas, "NO MOVES", width / 2f, boardY + boardSizeH / 2f - 80f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 90f)
+            draw3DText(canvas, "$adCountdown", width / 2f, boardY + boardSizeH / 2f + 40f, Color.WHITE, Color.DKGRAY, 150f)
+            draw3DButton(canvas, menuBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF42E5FF.toInt(), 0xFF0055FF.toInt())
         } else if (isGameOver) {
-            canvas.drawColor(0xDD000000.toInt())
-            draw3DText(canvas, "GAME OVER", width / 2f, height / 2f - 40f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
-            draw3DButton(canvas, centerBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
+            canvas.drawColor(0xEE000000.toInt())
+            if (isNewHighScore) {
+                text3DPaint.textSize = 150f; canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
+                draw3DText(canvas, "NEW BEST!", width / 2f, boardY + 60f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 100f)
+            } else {
+                draw3DText(canvas, "GAME OVER", width / 2f, boardY + boardSizeH / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
+            }
+            draw3DButton(canvas, restartBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
+            draw3DButton(canvas, menuBtnRect, "MAIN MENU", 0xFFFFA500.toInt(), 0xFFB87333.toInt())
+            
+            if (isNewHighScore) {
+                val pPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+                for(c in confettis) {
+                    pPaint.color = c.color; canvas.save(); canvas.translate(c.x, c.y); canvas.rotate(c.rot)
+                    canvas.drawRect(-c.size, -c.size, c.size, c.size, pPaint); canvas.restore()
+                    c.x += c.vx; c.y += c.vy; c.vy += 0.5f; c.rot += c.rotSpeed
+                }
+            }
         }
     }
 
@@ -227,32 +293,28 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         if (event.action != MotionEvent.ACTION_DOWN) return true
         val tx = event.x; val ty = event.y
 
-        if (isWaitingForAd && centerBtnRect.contains(tx, ty)) {
-            soundManager.playBtnClick()
-            soundManager.stopCountdownTick() // Timer stop
-            handler.removeCallbacks(timerRunnable)
-            (context as android.app.Activity).let { activity ->
+        if (showResumePopup) {
+            if (resumeBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); loadGame(); showResumePopup = false; return true }
+            if (newGameBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); prefs.edit().putBoolean("TetrisSaved", false).apply(); showResumePopup = false; restartGame(); return true }
+            return true
+        }
+
+        if (isWaitingForAd && menuBtnRect.contains(tx, ty)) {
+            soundManager.playBtnClick(); soundManager.stopCountdownTick(); handler.removeCallbacks(timerRunnable)
+            (context as Activity).let { activity ->
                 AdManager.showRewardAd(activity) { rewarded ->
                     if (rewarded) {
-                        isWaitingForAd = false
-                        for (r in ROWS - 4 until ROWS) for (c in 0 until COLS) grid[r][c] = 0
+                        isWaitingForAd = false; for (r in ROWS - 4 until ROWS) for (c in 0 until COLS) grid[r][c] = 0 // Clear 4 lines!
                         spawnPiece(); handler.postDelayed(gameLoop, speedMs); invalidate()
-                    } else { 
-                        isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); invalidate() 
-                    }
+                    } else { isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); checkAndTriggerConfetti(); invalidate() }
                 }
             }
             return true
         }
 
         if (isGameOver) {
-            if (centerBtnRect.contains(tx, ty)) {
-                soundManager.playBtnClick()
-                for (r in 0 until ROWS) for (c in 0 until COLS) grid[r][c] = 0
-                score = 0; speedMs = 600L; isGameOver = false
-                spawnPiece(); handler.postDelayed(gameLoop, speedMs); return true
-            }
-            return true
+            if (restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
+            if (menuBtnRect.contains(tx, ty)) { (context as Activity).finish(); return true }
         }
 
         when {
@@ -298,22 +360,22 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             } else r--
         }
         if (linesCleared > 0) {
-            soundManager.playClear(); vibratePhone(150L)
-            handler.postDelayed({ soundManager.playComboVoice(linesCleared) }, 600)
+            soundManager.playClear(); vibratePhone(150L); handler.postDelayed({ soundManager.playComboVoice(linesCleared) }, 600)
+            
+            val msg = when(linesCleared) { 1 -> "GOOD!"; 2 -> "SUPER!"; 3 -> "EXCELLENT!"; else -> "MAGNIFICENT!" }
+            floatingWords.add(FloatingWord(msg, boardY + boardSizeH/2f))
+            addCoins(linesCleared * 5)
             score += (linesCleared * 100) * linesCleared; speedMs = maxOf(150L, speedMs - 20L)
+            
             for (cr in clearedRows) {
+                glowLines.add(GlowLine(true, cr))
                 val blastY = boardY + cr * cellSize + cellSize/2f
                 for (c in 0 until COLS) {
                     val blastX = boardX + c * cellSize + cellSize/2f
                     for(i in 0..6) particles.add(Particle(blastX, blastY, Random.nextFloat()*16-8f, Random.nextFloat()*20-15f, 1f, getBaseColor(Random.nextInt(1,6))))
                 }
             }
-            
-            // Check High Score
-            if (score > highScore) {
-                highScore = score
-                prefs.edit().putInt("TetrisHighScore", highScore).apply()
-            }
+            if (score > highScore) { highScore = score; prefs.edit().putInt("TetrisHighScore", highScore).apply() }
         }
     }
 
@@ -325,5 +387,14 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         return true
     }
 
-    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); handler.removeCallbacks(gameLoop); handler.removeCallbacks(renderLoop); handler.removeCallbacks(timerRunnable); soundManager.release() }
+    private fun checkAndTriggerConfetti() {
+        val lastHS = prefs.getInt("LastTetrisHS", 0)
+        if (score > lastHS && score == highScore && score > 0) {
+            isNewHighScore = true; prefs.edit().putInt("LastTetrisHS", score).apply()
+            val colors = listOf(Color.RED, Color.GREEN, Color.YELLOW, Color.CYAN, Color.MAGENTA, Color.WHITE)
+            for (i in 0..150) confettis.add(Confetti(width/2f, boardY + 50f, Random.nextFloat()*30f-15f, Random.nextFloat() * -30f - 10f, colors.random(), Random.nextFloat()*15f+10f, Random.nextFloat()*360f, Random.nextFloat()*20f-10f))
+        }
+    }
+
+    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); saveGame(); handler.removeCallbacks(gameLoop); handler.removeCallbacks(renderLoop); handler.removeCallbacks(timerRunnable); soundManager.release() }
 }
