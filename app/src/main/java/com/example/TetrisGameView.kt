@@ -122,7 +122,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val padding = w * 0.15f; boardSizeW = w - padding * 2; cellSize = boardSizeW / COLS
-        boardSizeH = cellSize * ROWS; boardX = padding; boardY = 200f
+        boardSizeH = cellSize * ROWS; boardX = padding; boardY = 220f
         val controlCenterY = boardY + boardSizeH + 180f; val cx = w / 2f
         val btnSize = 150f; val gap = 25f
         btnRotate.set(cx - btnSize/2, controlCenterY - btnSize - gap, cx + btnSize/2, controlCenterY - gap)
@@ -137,10 +137,16 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         newGameBtnRect.set(cx - bw/2f, resumeBtnRect.bottom + 40f, cx + bw/2f, resumeBtnRect.bottom + 40f + bh)
     }
 
-    private fun draw3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
-        text3DPaint.textSize = size; text3DPaint.color = depthColor; text3DPaint.textAlign = align
-        for (i in 1..5) canvas.drawText(text, x, y + i * 2, text3DPaint)
-        text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
+    // CLAYMATION TEXT: Thick stroke + Fill + Gloss Highlight
+    private fun drawGlossy3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
+        text3DPaint.textSize = size; text3DPaint.textAlign = align
+        // Round Stroke Border (Clay look)
+        text3DPaint.style = Paint.Style.STROKE; text3DPaint.strokeWidth = size * 0.15f; text3DPaint.strokeJoin = Paint.Join.ROUND
+        text3DPaint.color = depthColor; canvas.drawText(text, x, y + size * 0.08f, text3DPaint)
+        // Solid Fill
+        text3DPaint.style = Paint.Style.FILL; text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
+        // Light highlight for glossy feel
+        text3DPaint.color = Color.argb(90, 255, 255, 255); canvas.drawText(text, x, y - size * 0.03f, text3DPaint)
     }
 
     private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int, size: Float = 45f) {
@@ -148,29 +154,32 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 30f, 30f, btnPaint)
         btnPaint.color = topColor
         canvas.drawRoundRect(rect, 30f, 30f, btnPaint)
-        text3DPaint.textSize = size; text3DPaint.color = Color.WHITE; text3DPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(text, rect.centerX(), rect.centerY() + size/3f, text3DPaint)
+        drawGlossy3DText(canvas, text, rect.centerX(), rect.centerY() + size/3f, Color.WHITE, Color.DKGRAY, size)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(Color.TRANSPARENT)
 
-        draw3DText(canvas, "SCORE", boardX + 40f, 70f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 40f, Paint.Align.LEFT)
-        draw3DText(canvas, "$score", boardX + 40f, 120f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.LEFT)
-        draw3DText(canvas, "BEST", width/2f, 70f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f, Paint.Align.CENTER)
-        draw3DText(canvas, "$highScore", width/2f, 120f, Color.WHITE, Color.DKGRAY, 50f, Paint.Align.CENTER)
+        // TETRIS PERFECT ALIGNMENT UI
+        val topY = 110f
+        drawGlossy3DText(canvas, "SCORE", boardX + 60f, topY, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 35f, Paint.Align.LEFT)
+        drawGlossy3DText(canvas, "$score", boardX + 60f, topY + 45f, Color.WHITE, Color.DKGRAY, 45f, Paint.Align.LEFT)
         
-        draw3DText(canvas, "NEXT", boardX + boardSizeW - 80f, 140f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 30f)
+        drawGlossy3DText(canvas, "BEST", width/2f, topY, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 35f, Paint.Align.CENTER)
+        drawGlossy3DText(canvas, "$highScore", width/2f, topY + 45f, Color.WHITE, Color.DKGRAY, 45f, Paint.Align.CENTER)
         
+        val nextTitleX = boardX + boardSizeW - 60f
+        drawGlossy3DText(canvas, "NEXT", nextTitleX, topY, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 35f, Paint.Align.CENTER)
         nextPiece?.let { piece ->
             val previewSize = cellSize * 0.5f
             for (r in 0 until piece.matrix.size) for (c in 0 until piece.matrix[0].size) 
-                if (piece.matrix[r][c] != 0) drawGlassy3DBlock(canvas, boardX + boardSizeW - 120f + c * previewSize, 160f + r * previewSize, previewSize, piece.colorId)
+                if (piece.matrix[r][c] != 0) {
+                    val px = nextTitleX - (piece.matrix[0].size * previewSize)/2f + c * previewSize
+                    val py = topY + 20f + r * previewSize
+                    drawGlassy3DBlock(canvas, px, py, previewSize, piece.colorId)
+                }
         }
-
-        val currentCoins = prefs.getInt("BoxBlastCoins", 0)
-        draw3DText(canvas, "🪙 $currentCoins", width/2f, 180f, Color.YELLOW, Color.DKGRAY, 35f)
 
         val rect = RectF(boardX, boardY, boardX + boardSizeW, boardY + boardSizeH)
         canvas.drawRoundRect(rect, 20f, 20f, boardPaint)
@@ -205,7 +214,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             val fw = iteratorWords.next()
             if (fw.scale < 1f) fw.scale += 0.05f; fw.y -= 3f; fw.alpha -= 0.02f
             canvas.save(); canvas.scale(fw.scale, fw.scale, width/2f, fw.y)
-            draw3DText(canvas, fw.text, width/2f, fw.y, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 100f)
+            drawGlossy3DText(canvas, fw.text, width/2f, fw.y, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 100f)
             canvas.restore(); if (fw.alpha <= 0) iteratorWords.remove()
         }
 
@@ -221,21 +230,21 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
         if (showResumePopup) {
             canvas.drawColor(0xEE000000.toInt())
-            draw3DText(canvas, "GAME SAVED", width / 2f, boardY + boardSizeH / 2f - 160f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 80f)
+            drawGlossy3DText(canvas, "GAME SAVED", width / 2f, boardY + boardSizeH / 2f - 160f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 80f)
             draw3DButton(canvas, resumeBtnRect, "RESUME", 0xFF2CD04E.toInt(), 0xFF147A29.toInt())
             draw3DButton(canvas, newGameBtnRect, "NEW GAME", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
         } else if (isWaitingForAd) {
             canvas.drawColor(0xDD000000.toInt())
-            draw3DText(canvas, "NO MOVES", width / 2f, boardY + boardSizeH / 2f - 80f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 90f)
-            draw3DText(canvas, "$adCountdown", width / 2f, boardY + boardSizeH / 2f + 40f, Color.WHITE, Color.DKGRAY, 150f)
-            draw3DButton(canvas, menuBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF42E5FF.toInt(), 0xFF0055FF.toInt())
+            drawGlossy3DText(canvas, "NO MOVES", width / 2f, boardY + boardSizeH / 2f - 80f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 90f)
+            drawGlossy3DText(canvas, "$adCountdown", width / 2f, boardY + boardSizeH / 2f + 40f, Color.WHITE, Color.DKGRAY, 150f)
+            draw3DButton(canvas, menuBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 40f)
         } else if (isGameOver) {
             canvas.drawColor(0xEE000000.toInt())
             if (isNewHighScore) {
                 text3DPaint.textSize = 150f; canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
-                draw3DText(canvas, "NEW BEST!", width / 2f, boardY + 60f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 100f)
+                drawGlossy3DText(canvas, "NEW BEST!", width / 2f, boardY + 60f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 100f)
             } else {
-                draw3DText(canvas, "GAME OVER", width / 2f, boardY + boardSizeH / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
+                drawGlossy3DText(canvas, "GAME OVER", width / 2f, boardY + boardSizeH / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 100f)
             }
             draw3DButton(canvas, restartBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
             draw3DButton(canvas, menuBtnRect, "MAIN MENU", 0xFFFFA500.toInt(), 0xFFB87333.toInt())
@@ -249,15 +258,6 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                 }
             }
         }
-    }
-
-    private fun draw3DControlButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int) {
-        btnPaint.color = bottomColor
-        canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 40f, 40f, btnPaint)
-        btnPaint.color = topColor
-        canvas.drawRoundRect(rect, 40f, 40f, btnPaint)
-        text3DPaint.textSize = rect.height() * 0.45f; text3DPaint.color = Color.WHITE
-        canvas.drawText(text, rect.centerX(), rect.centerY() + (text3DPaint.textSize / 3f), text3DPaint)
     }
 
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
@@ -300,7 +300,11 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
         if (isGameOver) {
             if (restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
-            if (menuBtnRect.contains(tx, ty)) { (context as Activity).finish(); return true }
+            if (menuBtnRect.contains(tx, ty)) { 
+                soundManager.playBtnClick()
+                prefs.edit().putBoolean("TetrisSaved", false).apply() // RESET SAVE BUG FIX
+                (context as Activity).finish(); return true 
+            }
         }
 
         when {
@@ -346,10 +350,10 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             } else r--
         }
         if (linesCleared > 0) {
-            soundManager.playClear(); vibratePhone(150L); handler.postDelayed({ soundManager.playComboVoice(linesCleared) }, 600)
+            soundManager.playClear(); vibratePhone(150L); 
+            val word = soundManager.playComboVoice(linesCleared) // AUDIO-WORD SYNC FIX
             
-            val msg = when(linesCleared) { 1 -> "GOOD!"; 2 -> "SUPER!"; 3 -> "EXCELLENT!"; else -> "MAGNIFICENT!" }
-            floatingWords.add(FloatingWord(msg, boardY + boardSizeH/2f))
+            floatingWords.add(FloatingWord(word, boardY + boardSizeH/2f))
             score += (linesCleared * 100) * linesCleared; speedMs = maxOf(150L, speedMs - 20L)
             
             for (cr in clearedRows) {
@@ -366,7 +370,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                     hsRewardGiven = true
                     var shuffles = prefs.getInt("FreeShuffles", 0)
                     prefs.edit().putInt("FreeShuffles", shuffles + 1).apply()
-                    floatingWords.add(FloatingWord("FREE SHUFFLE!", boardY + boardSizeH/2f + 80f)) // Reward
+                    floatingWords.add(FloatingWord("FREE SHUFFLE!", boardY + boardSizeH/2f + 80f)) 
                 }
             }
         }
