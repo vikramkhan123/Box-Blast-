@@ -12,7 +12,7 @@ class TetrisGameActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val layout = LinearLayout(this)
         layout.orientation = LinearLayout.VERTICAL
 
@@ -23,7 +23,7 @@ class TetrisGameActivity : ComponentActivity() {
         // Banner Ad
         val adView = AdView(this)
         adView.setAdSize(AdSize.BANNER)
-        adView.adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test Banner ID
+        adView.adUnitId = "ca-app-pub-4346513942475662/6000762095" // Original Banner ID
         adView.loadAd(AdRequest.Builder().build())
         layout.addView(adView)
 
