@@ -24,7 +24,7 @@ class SoundManager(val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private var isBgmActive = false 
     
-    private var tickStreamId = 0 // Timer ko control karne ke liye naya variable
+    private var tickStreamId = 0 
 
     init {
         val audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
@@ -74,22 +74,19 @@ class SoundManager(val context: Context) {
 
     fun playCountdownTick() { 
         if (countdownTickId != 0) {
-            stopCountdownTick() // Purani tick roko
+            stopCountdownTick()
             tickStreamId = soundPool.play(countdownTickId, 1f, 1f, 1, 0, 1f) 
         } 
     }
-    
-    // Yahan Timer ko rokne ka function banaya gaya hai
-    fun stopCountdownTick() {
-        if (tickStreamId != 0) {
-            soundPool.stop(tickStreamId)
-            tickStreamId = 0
-        }
-    }
+    fun stopCountdownTick() { if (tickStreamId != 0) { soundPool.stop(tickStreamId); tickStreamId = 0 } }
 
-    fun playComboVoice(linesCleared: Int) {
-        val pool = if (linesCleared == 1) listOf(voiceGoodId, voiceExcellentId, voiceSuperId).filter { it != 0 } else listOf(voiceMagnificentId, voiceUnbelievableId, voiceGloriousId, voiceMajesticId).filter { it != 0 }
-        if (pool.isNotEmpty()) soundPool.play(pool.random(), 1f, 1f, 1, 0, 1f)
+    // Returns EXACT word that matches the sound played!
+    fun playComboVoice(linesCleared: Int): String {
+        val pool1 = listOf(Pair(voiceGoodId, "GOOD!"), Pair(voiceExcellentId, "EXCELLENT!"), Pair(voiceSuperId, "SUPER!"))
+        val pool2 = listOf(Pair(voiceMagnificentId, "MAGNIFICENT!"), Pair(voiceUnbelievableId, "UNBELIEVABLE!"), Pair(voiceGloriousId, "GLORIOUS!"), Pair(voiceMajesticId, "MAJESTIC!"))
+        val selection = if (linesCleared <= 1) pool1.random() else pool2.random()
+        if (selection.first != 0) soundPool.play(selection.first, 1f, 1f, 1, 0, 1f)
+        return selection.second
     }
 
     fun release() { soundPool.release(); stopBGM() }
