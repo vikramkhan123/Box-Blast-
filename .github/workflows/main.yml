@@ -18,9 +18,9 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # Ye step server par purana tool install karega jo Signing ke liye zaroori hai
+    # Ye step server ko exact address dekar purana tool install karega
     - name: Install Android Build Tools 29.0.3
-      run: sdkmanager "build-tools;29.0.3"
+      run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;29.0.3"
 
     # 1. Play Store ke liye AAB aur Free Stores ke liye APK generate karna
     - name: Build Release AAB & APK
