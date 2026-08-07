@@ -136,6 +136,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         newGameBtnRect.set(cx - bw/2f, resumeBtnRect.bottom + 40f, cx + bw/2f, resumeBtnRect.bottom + 40f + bh)
     }
 
+    // CLAYMATION TEXT
     private fun drawGlossy3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
         text3DPaint.textSize = size; text3DPaint.textAlign = align; text3DPaint.clearShadowLayer()
         text3DPaint.style = Paint.Style.STROKE; text3DPaint.strokeWidth = size * 0.15f; text3DPaint.strokeJoin = Paint.Join.ROUND
@@ -156,6 +157,15 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         btnPaint.color = bottomColor; canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 30f, 30f, btnPaint)
         btnPaint.color = topColor; canvas.drawRoundRect(rect, 30f, 30f, btnPaint)
         drawGlossy3DText(canvas, text, rect.centerX(), rect.centerY() + size/3f, Color.WHITE, Color.DKGRAY, size)
+    }
+
+    // MISSING FUNCTION FIXED HERE!
+    private fun draw3DControlButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int) {
+        btnPaint.color = bottomColor
+        canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 40f, 40f, btnPaint)
+        btnPaint.color = topColor
+        canvas.drawRoundRect(rect, 40f, 40f, btnPaint)
+        drawGlossy3DText(canvas, text, rect.centerX(), rect.centerY() + rect.height() * 0.15f, Color.WHITE, Color.DKGRAY, rect.height() * 0.45f)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -292,7 +302,11 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
         if (isGameOver) {
             if (restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
-            if (menuBtnRect.contains(tx, ty)) { prefs.edit().putBoolean("TetrisSaved", false).apply(); (context as Activity).finish(); return true }
+            if (menuBtnRect.contains(tx, ty)) { 
+                soundManager.playBtnClick()
+                prefs.edit().putBoolean("TetrisSaved", false).apply()
+                (context as Activity).finish(); return true 
+            }
         }
 
         when {
