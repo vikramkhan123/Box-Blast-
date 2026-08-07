@@ -24,15 +24,30 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     
     private var score = 0
     private var highScore = prefs.getInt("ClassicHighScore", 0)
+    private var coins = prefs.getInt("BoxBlastCoins", 0)
     
-    private var isGameOver = false; private var isWaitingForAd = false; private var adCountdown = 10 
+    private var isGameOver = false
+    private var isWaitingForAd = false
+    private var adCountdown = 10 
+    private var isNewHighScore = false
 
+    // Save/Resume State
+    private var showResumePopup = false
+    private val resumeBtnRect = RectF()
+    private val newGameBtnRect = RectF()
+    private val shuffleBtnRect = RectF()
+
+    // Animations
+    data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
+    private val particles = mutableListOf<Particle>()
+    data class Confetti(var x: Float, var y: Float, var vx: Float, var vy: Float, val color: Int, var size: Float, var rot: Float, var rotSpeed: Float)
+    private val confettis = mutableListOf<Confetti>()
     data class GlowLine(val isRow: Boolean, val index: Int, var alpha: Float = 1f)
     private val glowLines = mutableListOf<GlowLine>()
-
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
+    // Paints
     private val bgPaint = Paint().apply { style = Paint.Style.FILL }
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f; setShadowLayer(15f, 0f, 0f, 0xFF42E5FF.toInt()) }
@@ -45,7 +60,6 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
     private var trayY = 0f; private var trayCellSize = 0f
-    
     private val restartBtnRect = RectF()
     private val menuBtnRect = RectF()
 
@@ -70,23 +84,53 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         override fun run() {
             if (isWaitingForAd && adCountdown > 0) {
                 soundManager.playCountdownTick(); adCountdown--
-                if (adCountdown == 0) { isWaitingForAd = false; isGameOver = true; soundManager.stopCountdownTick(); soundManager.playGameOver() } 
+                if (adCountdown == 0) { isWaitingForAd = false; isGameOver = true; soundManager.stopCountdownTick(); soundManager.playGameOver(); checkAndTriggerConfetti() } 
                 else handler.postDelayed(this, 1000L)
                 invalidate()
             }
         }
     }
 
-    init { restartGame(); handler.post(renderLoop) }
+    init { 
+        if (prefs.getBoolean("ClassicSaved", false)) showResumePopup = true else restartGame()
+        handler.post(renderLoop) 
+    }
+
+    private fun addCoins(amount: Int) { coins += amount; prefs.edit().putInt("BoxBlastCoins", coins).apply() }
+    private fun useCoins(amount: Int): Boolean { if (coins >= amount) { coins -= amount; prefs.edit().putInt("BoxBlastCoins", coins).apply(); return true }; return false }
 
     private fun vibratePhone(duration: Long = 50L) { try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") vibrator.vibrate(duration) } catch (e: Exception) { } }
 
     private fun restartGame() {
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
-        score = 0; isGameOver = false; isWaitingForAd = false; adCountdown = 10
-        glowLines.clear(); floatingWords.clear()
+        score = 0; isGameOver = false; isWaitingForAd = false; adCountdown = 10; isNewHighScore = false
+        particles.clear(); glowLines.clear(); floatingWords.clear(); confettis.clear()
+        prefs.edit().putBoolean("ClassicSaved", false).apply()
         for (i in 0 until 3) trayShapes[i] = null
         fillTray()
+    }
+
+    private fun loadGame() {
+        score = prefs.getInt("ClassicScore", 0)
+        val gridStr = prefs.getString("ClassicGrid", "")
+        if (!gridStr.isNullOrEmpty()) {
+            val rows = gridStr.split(";")
+            for (r in 0 until 8) {
+                val cols = rows[r].split(",")
+                for (c in 0 until 8) grid[r][c] = cols[c].toInt()
+            }
+        }
+        for (i in 0 until 3) trayShapes[i] = null
+        fillTray()
+    }
+
+    private fun saveGame() {
+        if (isGameOver || showResumePopup || isWaitingForAd) return
+        prefs.edit()
+            .putBoolean("ClassicSaved", true)
+            .putInt("ClassicScore", score)
+            .putString("ClassicGrid", grid.joinToString(";") { it.joinToString(",") })
+            .apply()
     }
 
     private fun fillTray() {
@@ -115,10 +159,15 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         super.onSizeChanged(w, h, oldw, oldh)
         boardSize = w - 60f; cellSize = boardSize / 8; boardX = 30f; boardY = 250f
         trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f
-        val bw = 600f; val bh = 130f
-        val cx = w/2f
+        val bw = 600f; val bh = 130f; val cx = w/2f
+        
         restartBtnRect.set(cx - bw/2f, boardY + boardSize/2f - 40f, cx + bw/2f, boardY + boardSize/2f - 40f + bh)
         menuBtnRect.set(cx - bw/2f, restartBtnRect.bottom + 30f, cx + bw/2f, restartBtnRect.bottom + 30f + bh)
+        
+        resumeBtnRect.set(cx - bw/2f, boardY + boardSize/2f - 60f, cx + bw/2f, boardY + boardSize/2f - 60f + bh)
+        newGameBtnRect.set(cx - bw/2f, resumeBtnRect.bottom + 40f, cx + bw/2f, resumeBtnRect.bottom + 40f + bh)
+        
+        shuffleBtnRect.set(cx - 150f, trayY + trayCellSize * 4.5f, cx + 150f, trayY + trayCellSize * 4.5f + 110f)
         updateTrayPositions()
     }
 
@@ -128,43 +177,44 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         for (i in 0 until 3) trayShapes[i]?.let { if (!it.placed) { it.cx = (i * sectionWidth) + (sectionWidth - (it.cols * trayCellSize)) / 2f; it.cy = trayY + (sectionWidth - (it.rows * trayCellSize)) / 2f } }
     }
 
-    private fun draw3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float) {
-        text3DPaint.textSize = size; text3DPaint.color = depthColor
+    private fun draw3DText(canvas: Canvas, text: String, x: Float, y: Float, mainColor: Int, depthColor: Int, size: Float, align: Paint.Align = Paint.Align.CENTER) {
+        text3DPaint.textSize = size; text3DPaint.color = depthColor; text3DPaint.textAlign = align
         for (i in 1..6) canvas.drawText(text, x, y + i * 2, text3DPaint)
         text3DPaint.color = mainColor; canvas.drawText(text, x, y, text3DPaint)
     }
 
-    private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int) {
+    private fun draw3DButton(canvas: Canvas, rect: RectF, text: String, topColor: Int, bottomColor: Int, size: Float = 45f) {
         btnPaint.color = bottomColor
         canvas.drawRoundRect(RectF(rect.left, rect.top + 15f, rect.right, rect.bottom + 15f), 30f, 30f, btnPaint)
         btnPaint.color = topColor
         canvas.drawRoundRect(rect, 30f, 30f, btnPaint)
-        text3DPaint.textSize = 45f; text3DPaint.color = Color.WHITE
-        canvas.drawText(text, rect.centerX(), rect.centerY() + 15f, text3DPaint)
+        text3DPaint.textSize = size; text3DPaint.color = Color.WHITE; text3DPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText(text, rect.centerX(), rect.centerY() + size/3f, text3DPaint)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(0xFF0F172A.toInt()) 
+        canvas.drawColor(Color.TRANSPARENT) // Background handled by MainActivity
         
-        draw3DText(canvas, "SCORE", width / 4f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 60f)
-        draw3DText(canvas, "$score", width / 4f, 160f, Color.WHITE, Color.DKGRAY, 80f)
-        draw3DText(canvas, "BEST", (width / 4f) * 3f, 100f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 60f)
-        draw3DText(canvas, "$highScore", (width / 4f) * 3f, 160f, Color.WHITE, Color.DKGRAY, 80f)
+        draw3DText(canvas, "SCORE", width / 4f, 100f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 50f)
+        draw3DText(canvas, "$score", width / 4f, 160f, Color.WHITE, Color.DKGRAY, 65f)
+        
+        draw3DText(canvas, "BEST", (width / 4f) * 3f, 100f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 50f)
+        draw3DText(canvas, "$highScore", (width / 4f) * 3f, 160f, Color.WHITE, Color.DKGRAY, 65f)
+        
+        // Coins Counter
+        draw3DText(canvas, "🪙 $coins", width / 2f, 100f, Color.YELLOW, 0xFF8B6508.toInt(), 45f)
 
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         canvas.drawRoundRect(rect, 24f, 24f, boardPaint)
         canvas.drawRoundRect(rect, 24f, 24f, boardBorderPaint)
 
-        // Draw Glow Lines
         val iteratorGlow = glowLines.iterator()
         while(iteratorGlow.hasNext()) {
-            val glow = iteratorGlow.next()
-            glowPaint.alpha = (glow.alpha * 200).toInt()
+            val glow = iteratorGlow.next(); glowPaint.alpha = (glow.alpha * 200).toInt()
             if (glow.isRow) canvas.drawRoundRect(RectF(boardX, boardY + glow.index * cellSize, boardX + boardSize, boardY + (glow.index+1)*cellSize), 12f, 12f, glowPaint)
             else canvas.drawRoundRect(RectF(boardX + glow.index * cellSize, boardY, boardX + (glow.index+1)*cellSize, boardY + boardSize), 12f, 12f, glowPaint)
-            glow.alpha -= 0.05f
-            if (glow.alpha <= 0) iteratorGlow.remove()
+            glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
         val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
@@ -177,29 +227,61 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         draggingShape?.let { if (canFitHover) drawNeonShadow(canvas, it, boardX + hoverCol * cellSize, boardY + hoverRow * cellSize, cellSize) }
         for (i in 0 until 3) if (i != draggingShapeIndex) trayShapes[i]?.let { if (!it.placed) drawShape(canvas, it, it.cx, it.cy, trayCellSize) }
         draggingShape?.let { drawShape(canvas, it, it.cx, it.cy, cellSize) }
+        
+        // Powerup Button
+        if(!isGameOver && !showResumePopup && !isWaitingForAd) {
+            draw3DButton(canvas, shuffleBtnRect, "🔀 50", 0xFF9D4EDD.toInt(), 0xFF4A00E0.toInt(), 40f)
+        }
 
-        // Draw Floating Words
         val iteratorWords = floatingWords.iterator()
         while(iteratorWords.hasNext()) {
             val fw = iteratorWords.next()
-            if (fw.scale < 1f) fw.scale += 0.05f
-            fw.y -= 3f; fw.alpha -= 0.02f
+            if (fw.scale < 1f) fw.scale += 0.05f; fw.y -= 3f; fw.alpha -= 0.02f
             canvas.save(); canvas.scale(fw.scale, fw.scale, width/2f, fw.y)
             draw3DText(canvas, fw.text, width/2f, fw.y, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 100f)
-            canvas.restore()
-            if (fw.alpha <= 0) iteratorWords.remove()
+            canvas.restore(); if (fw.alpha <= 0) iteratorWords.remove()
         }
 
-        if (isWaitingForAd) {
+        if (particles.isNotEmpty()) {
+            val iterator = particles.iterator(); val pPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            while (iterator.hasNext()) {
+                val p = iterator.next(); pPaint.color = p.color; pPaint.alpha = (p.life * 255).toInt().coerceIn(0, 255)
+                canvas.drawCircle(p.x, p.y, cellSize * 0.15f * p.life, pPaint)
+                p.x += p.vx; p.y += p.vy; p.vy += 1.5f; p.life -= 0.03f
+                if (p.life <= 0) iterator.remove()
+            }
+        }
+
+        if (showResumePopup) {
+            canvas.drawColor(0xEE000000.toInt())
+            draw3DText(canvas, "GAME SAVED", width / 2f, boardY + boardSize / 2f - 160f, 0xFF42E5FF.toInt(), 0xFF0055FF.toInt(), 80f)
+            draw3DButton(canvas, resumeBtnRect, "RESUME", 0xFF2CD04E.toInt(), 0xFF147A29.toInt())
+            draw3DButton(canvas, newGameBtnRect, "NEW GAME", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
+        } else if (isWaitingForAd) {
             canvas.drawColor(0xDD000000.toInt())
             draw3DText(canvas, "OUT OF MOVES", width / 2f, boardY + boardSize / 2f - 80f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 90f)
             draw3DText(canvas, "$adCountdown", width / 2f, boardY + boardSize / 2f + 40f, Color.WHITE, Color.DKGRAY, 150f)
             draw3DButton(canvas, menuBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF42E5FF.toInt(), 0xFF0055FF.toInt())
         } else if (isGameOver) {
-            canvas.drawColor(0xDD000000.toInt())
-            draw3DText(canvas, "GAME OVER", width / 2f, boardY + boardSize / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
+            canvas.drawColor(0xEE000000.toInt())
+            if (isNewHighScore) {
+                text3DPaint.textSize = 150f; canvas.drawText("👑", width/2f, boardY - 50f, text3DPaint)
+                draw3DText(canvas, "NEW BEST!", width / 2f, boardY + 60f, 0xFFFFD700.toInt(), 0xFF8B6508.toInt(), 100f)
+            } else {
+                draw3DText(canvas, "GAME OVER", width / 2f, boardY + boardSize / 2f - 120f, 0xFFFF5E62.toInt(), 0xFF8B0000.toInt(), 110f)
+            }
             draw3DButton(canvas, restartBtnRect, "RESTART", 0xFFFF5E62.toInt(), 0xFF8B0000.toInt())
             draw3DButton(canvas, menuBtnRect, "MAIN MENU", 0xFFFFA500.toInt(), 0xFFB87333.toInt())
+            
+            // Draw Confetti
+            if (isNewHighScore) {
+                val pPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+                for(c in confettis) {
+                    pPaint.color = c.color; canvas.save(); canvas.translate(c.x, c.y); canvas.rotate(c.rot)
+                    canvas.drawRect(-c.size, -c.size, c.size, c.size, pPaint); canvas.restore()
+                    c.x += c.vx; c.y += c.vy; c.vy += 0.5f; c.rot += c.rotSpeed
+                }
+            }
         }
     }
 
@@ -228,23 +310,33 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private fun adjustColorLightness(color: Int, factor: Float): Int {
         val hsv = FloatArray(3); Color.colorToHSV(color, hsv); hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f); return Color.HSVToColor(hsv)
     }
-
-    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); 6 -> 0xFF00FF00.toInt(); 7 -> 0xFFFFA500.toInt(); else -> 0xFFFFFFFF.toInt() }
+    private fun getBaseColor(id: Int): Int = when (id) { 1 -> 0xFFE63946.toInt(); 2 -> 0xFF00B4D8.toInt(); 3 -> 0xFF2DC653.toInt(); 4 -> 0xFFFFB703.toInt(); 5 -> 0xFF9D4EDD.toInt(); else -> 0xFFFFFFFF.toInt() }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val tx = event.x; val ty = event.y
 
         if (event.action == MotionEvent.ACTION_DOWN) {
+            if (showResumePopup) {
+                if (resumeBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); loadGame(); showResumePopup = false; return true }
+                if (newGameBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); prefs.edit().putBoolean("ClassicSaved", false).apply(); showResumePopup = false; restartGame(); return true }
+                return true
+            }
+
+            if (!isGameOver && !showResumePopup && !isWaitingForAd && shuffleBtnRect.contains(tx, ty)) {
+                if (useCoins(50)) { soundManager.playBtnClick(); for(i in 0 until 3) trayShapes[i] = null; fillTray() } 
+                else { soundManager.playGameOver() } // Error sound for no money
+                return true
+            }
+
             if (isWaitingForAd && menuBtnRect.contains(tx, ty)) {
                 soundManager.playBtnClick(); soundManager.stopCountdownTick(); handler.removeCallbacks(timerRunnable)
                 (context as Activity).let { activity ->
                     AdManager.showRewardAd(activity) { rewarded ->
                         if (rewarded) {
-                            isWaitingForAd = false
-                            for(r in 5..7) for(c in 0 until 8) grid[r][c] = 0 // Clear 3 lines
+                            isWaitingForAd = false; for(r in 5..7) for(c in 0 until 8) grid[r][c] = 0 // Clear 3 lines
                             trayShapes[0] = Shape(arrayOf(intArrayOf(1))); trayShapes[1] = null; trayShapes[2] = null
                             updateTrayPositions(); invalidate()
-                        } else { isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); invalidate() }
+                        } else { isWaitingForAd = false; isGameOver = true; soundManager.playGameOver(); checkAndTriggerConfetti(); invalidate() }
                     }
                 }
                 return true
@@ -254,7 +346,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 if (menuBtnRect.contains(tx, ty)) { (context as Activity).finish(); return true }
             }
         }
-        if (isGameOver || isWaitingForAd) return true
+        if (isGameOver || isWaitingForAd || showResumePopup) return true
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
@@ -303,11 +395,11 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         val total = rows.size + cols.size
 
         if (total > 0) {
-            soundManager.playClear(); vibratePhone(100L)
-            handler.postDelayed({ soundManager.playComboVoice(total) }, 600)
+            soundManager.playClear(); vibratePhone(100L); handler.postDelayed({ soundManager.playComboVoice(total) }, 600)
             
             val msg = when(total) { 1 -> "GOOD!"; 2 -> "SUPER!"; 3 -> "EXCELLENT!"; else -> "MAGNIFICENT!" }
             floatingWords.add(FloatingWord(msg, boardY + boardSize/2f))
+            addCoins(total * 5) // Reward Coins!
 
             for (r in rows) { glowLines.add(GlowLine(true, r)); for (c in 0 until 8) { grid[r][c] = 0 }; score += 100 }
             for (c in cols) { glowLines.add(GlowLine(false, c)); for (r in 0 until 8) { grid[r][c] = 0 }; score += 100 }
@@ -325,5 +417,19 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         if (!canMakeMove) { isWaitingForAd = true; adCountdown = 10; handler.post(timerRunnable); invalidate() }
     }
 
-    override fun onDetachedFromWindow() { super.onDetachedFromWindow(); handler.removeCallbacks(renderLoop); handler.removeCallbacks(timerRunnable); soundManager.release() }
+    private fun checkAndTriggerConfetti() {
+        val lastHS = prefs.getInt("LastTriggeredHS", 0)
+        if (score > lastHS && score == highScore && score > 0) {
+            isNewHighScore = true
+            prefs.edit().putInt("LastTriggeredHS", score).apply()
+            val colors = listOf(Color.RED, Color.GREEN, Color.YELLOW, Color.CYAN, Color.MAGENTA, Color.WHITE)
+            for (i in 0..150) confettis.add(Confetti(width/2f, boardY + 50f, Random.nextFloat()*30f-15f, Random.nextFloat() * -30f - 10f, colors.random(), Random.nextFloat()*15f+10f, Random.nextFloat()*360f, Random.nextFloat()*20f-10f))
+        }
+    }
+
+    override fun onDetachedFromWindow() { 
+        super.onDetachedFromWindow()
+        saveGame()
+        handler.removeCallbacks(renderLoop); handler.removeCallbacks(timerRunnable); soundManager.release() 
+    }
 }
