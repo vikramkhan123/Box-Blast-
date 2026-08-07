@@ -1,7 +1,7 @@
 package com.example
 
 import android.app.Activity
-import android.content.Context
+import android.util.Log
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -11,34 +11,52 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
 object AdManager {
     private var rewardedAd: RewardedAd? = null
-    // Test Reward Ad ID
-    private const val REWARD_AD_ID = "ca-app-pub-3940256099942544/5224354917"
+    private var isAdLoading = false
 
-    fun loadRewardAd(context: Context) {
+    // Aapki ORIGINAL Rewarded Ad Unit ID
+    private const val AD_UNIT_ID = "ca-app-pub-4346513942475662/6917543938" 
+
+    fun loadRewardAd(activity: Activity) {
+        if (rewardedAd != null || isAdLoading) return
+        isAdLoading = true
         val adRequest = AdRequest.Builder().build()
-        RewardedAd.load(context, REWARD_AD_ID, adRequest, object : RewardedAdLoadCallback() {
-            override fun onAdFailedToLoad(adError: LoadAdError) { rewardedAd = null }
-            override fun onAdLoaded(ad: RewardedAd) { rewardedAd = ad }
+
+        RewardedAd.load(activity, AD_UNIT_ID, adRequest, object : RewardedAdLoadCallback() {
+            override fun onAdFailedToLoad(adError: LoadAdError) {
+                Log.d("AdManager", "Ad failed to load: ${adError.message}")
+                rewardedAd = null
+                isAdLoading = false
+            }
+
+            override fun onAdLoaded(ad: RewardedAd) {
+                Log.d("AdManager", "Ad was loaded.")
+                rewardedAd = ad
+                isAdLoading = false
+            }
         })
     }
 
-    fun showRewardAd(activity: Activity, onRewardHandled: (Boolean) -> Unit) {
+    fun showRewardAd(activity: Activity, onAdClosed: (Boolean) -> Unit) {
         if (rewardedAd != null) {
             rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     rewardedAd = null
-                    loadRewardAd(activity) // Load next ad
+                    loadRewardAd(activity) // Agle use ke liye naya ad load karein
                 }
-                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                    onRewardHandled(false)
+                override fun onAdFailedToShowFullScreenContent(p0: AdError) {
+                    rewardedAd = null
+                    onAdClosed(false)
                 }
             }
+
             rewardedAd?.show(activity) { rewardItem ->
-                onRewardHandled(true) // User ne ad dekha, reward de do!
+                // User ne poora ad dekh liya hai
+                onAdClosed(true)
             }
         } else {
-            // Agar ad load nahi hua (No internet), toh free reward de do
-            onRewardHandled(true)
+            // Agar ad load nahi hua hai ya internet issue hai
+            Log.d("AdManager", "The rewarded ad wasn't ready yet.")
+            onAdClosed(false)
             loadRewardAd(activity)
         }
     }
