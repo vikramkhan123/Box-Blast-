@@ -99,12 +99,26 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
+    // CRASH FIX: Safe loading with minOf boundary checks
     private fun loadGame() {
         try {
-            score = prefs.getInt("ClassicScore", 0); hsRewardGiven = prefs.getBoolean("ClassicHSReward", false)
+            score = prefs.getInt("ClassicScore", 0)
+            hsRewardGiven = prefs.getBoolean("ClassicHSReward", false)
             val gridStr = prefs.getString("ClassicGrid", "")
-            if (!gridStr.isNullOrEmpty()) { val rows = gridStr.split(";"); for (r in 0 until 8) { val cols = rows[r].split(","); if(cols.size >= 8){ for (c in 0 until 8) grid[r][c] = cols[c].toInt() } } }
-        } catch (e: Exception) { restartGame(); return }
+            if (gridStr?.isNotEmpty() == true) {
+                val rows = gridStr.split(";")
+                for (r in 0 until Math.min(8, rows.size)) {
+                    val cols = rows[r].split(",")
+                    for (c in 0 until Math.min(8, cols.size)) {
+                        grid[r][c] = cols[c].toInt()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
+            score = 0
+        }
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
@@ -267,7 +281,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
         val baseColor = getBaseColor(colorId)
         val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, intArrayOf(adjustColorLightness(baseColor, 1.4f), baseColor, adjustColorLightness(baseColor, 0.6f)), null, Shader.TileMode.CLAMP)
-        blockBasePaint.shader = grad; canvas.drawRoundRect(rect, 16f, 16f, blockBasePaint); blockBasePaint.shader = null 
+        blockBasePaint.shader = grad; canvas.drawRoundRect(rect, 10f, 10f, blockBasePaint); blockBasePaint.shader = null 
         val overlayRect = RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.top + size * 0.4f)
         val shineGrad = LinearGradient(overlayRect.left, overlayRect.top, overlayRect.left, overlayRect.bottom, 0x88FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
         glassOverlayPaint.shader = shineGrad; canvas.drawRoundRect(overlayRect, 14f, 14f, glassOverlayPaint)
