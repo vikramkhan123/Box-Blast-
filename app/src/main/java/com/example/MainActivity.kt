@@ -44,7 +44,6 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Only Original Background Image
                 Image(
                     painter = painterResource(id = R.drawable.bg_main),
                     contentDescription = "Background",
@@ -57,21 +56,24 @@ class MainActivity : ComponentActivity() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Bottom
                 ) {
-                    PremiumButton(title = "TETRIS FALL", icon = "🧩", topColor = Color(0xFFFFDF00), bottomColor = Color(0xFFE67300), borderColor = Color(0xFFFFFF88)) {
-                        soundManager.playBtnClick()
-                        startActivity(Intent(this@MainActivity, TetrisGameActivity::class.java))
-                    }
-                    Spacer(modifier = Modifier.height(20.dp))
-                    
+                    // 1. ADVENTURE
                     PremiumButton(title = "ADVENTURE", icon = "🗺️", topColor = Color(0xFF42E5FF), bottomColor = Color(0xFF0055FF), borderColor = Color(0xFF8BFFFF)) {
                         soundManager.playBtnClick()
                         startActivity(Intent(this@MainActivity, LevelSelectionActivity::class.java))
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                     
+                    // 2. CLASSIC
                     PremiumButton(title = "CLASSIC", icon = "👑", topColor = Color(0xFFB452FF), bottomColor = Color(0xFF5E17EB), borderColor = Color(0xFFE48DFF)) {
                         soundManager.playBtnClick()
                         startActivity(Intent(this@MainActivity, ClassicGameActivity::class.java))
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // 3. TETRIS FALL
+                    PremiumButton(title = "TETRIS FALL", icon = "🧩", topColor = Color(0xFFFFDF00), bottomColor = Color(0xFFE67300), borderColor = Color(0xFFFFFF88)) {
+                        soundManager.playBtnClick()
+                        startActivity(Intent(this@MainActivity, TetrisGameActivity::class.java))
                     }
                 }
             }
