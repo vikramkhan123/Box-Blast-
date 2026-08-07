@@ -4,8 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.SoundPool
-import android.os.Handler
-import android.os.Looper
 
 class SoundManager(val context: Context) {
     private var soundPool: SoundPool
@@ -18,12 +16,7 @@ class SoundManager(val context: Context) {
     var voiceMagnificentId = 0; var voiceUnbelievableId = 0
     var voiceGloriousId = 0; var voiceMajesticId = 0
 
-    private val bgmPlaylist = listOf(R.raw.bgm_relaxing_1, R.raw.bgm_relaxing_2, R.raw.bgm_relaxing_3)
-    private var currentBgmIndex = 0
     private var bgmPlayer: MediaPlayer? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private var isBgmActive = false 
-    
     private var tickStreamId = 0 
 
     init {
@@ -47,23 +40,19 @@ class SoundManager(val context: Context) {
     }
 
     fun playBGM() {
-        isBgmActive = true
         if (bgmPlayer != null && bgmPlayer!!.isPlaying) return
         try {
             if (bgmPlayer == null) {
-                bgmPlayer = MediaPlayer.create(context, bgmPlaylist[currentBgmIndex])
+                bgmPlayer = MediaPlayer.create(context, R.raw.bgm_relaxing_1)
+                bgmPlayer?.isLooping = true
                 bgmPlayer?.setVolume(1.0f, 1.0f)
-                bgmPlayer?.setOnCompletionListener {
-                    it.release(); bgmPlayer = null; currentBgmIndex = (currentBgmIndex + 1) % bgmPlaylist.size
-                    if (isBgmActive) handler.postDelayed({ playBGM() }, 1000)
-                }
             }
             bgmPlayer?.start()
         } catch (e: Exception) { e.printStackTrace() }
     }
 
-    fun pauseBGM() { isBgmActive = false; handler.removeCallbacksAndMessages(null); if (bgmPlayer?.isPlaying == true) bgmPlayer?.pause() }
-    fun stopBGM() { isBgmActive = false; handler.removeCallbacksAndMessages(null); bgmPlayer?.stop(); bgmPlayer?.release(); bgmPlayer = null }
+    fun pauseBGM() { if (bgmPlayer?.isPlaying == true) bgmPlayer?.pause() }
+    fun stopBGM() { bgmPlayer?.stop(); bgmPlayer?.release(); bgmPlayer = null }
 
     fun playPick() { if (pickSoundId != 0) soundPool.play(pickSoundId, 1f, 1f, 1, 0, 1f) }
     fun playDrop() { if (dropSoundId != 0) soundPool.play(dropSoundId, 1f, 1f, 1, 0, 1f) }
@@ -80,7 +69,6 @@ class SoundManager(val context: Context) {
     }
     fun stopCountdownTick() { if (tickStreamId != 0) { soundPool.stop(tickStreamId); tickStreamId = 0 } }
 
-    // Returns EXACT word that matches the sound played!
     fun playComboVoice(linesCleared: Int): String {
         val pool1 = listOf(Pair(voiceGoodId, "GOOD!"), Pair(voiceExcellentId, "EXCELLENT!"), Pair(voiceSuperId, "SUPER!"))
         val pool2 = listOf(Pair(voiceMagnificentId, "MAGNIFICENT!"), Pair(voiceUnbelievableId, "UNBELIEVABLE!"), Pair(voiceGloriousId, "GLORIOUS!"), Pair(voiceMajesticId, "MAJESTIC!"))
