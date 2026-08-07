@@ -18,10 +18,11 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # Direct Gradle command (Bypass missing gradlew error)
+    # 1. Play Store ke liye AAB aur Free Stores ke liye APK generate karna
     - name: Build Release AAB & APK
       run: gradle bundleRelease assembleRelease
 
+    # 2. AAB ko Sign (Lock) karna
     - name: Sign AAB
       id: sign_aab
       uses: r0adkll/sign-android-release@v1
@@ -31,7 +32,9 @@ jobs:
         alias: ${{ secrets.ALIAS }}
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
+        buildToolsVersion: 34.0.0
 
+    # 3. APK ko Sign (Lock) karna (Naya Tool Version add kiya)
     - name: Sign APK
       id: sign_apk
       uses: r0adkll/sign-android-release@v1
@@ -41,13 +44,16 @@ jobs:
         alias: ${{ secrets.ALIAS }}
         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
         keyPassword: ${{ secrets.KEY_PASSWORD }}
+        buildToolsVersion: 34.0.0
 
+    # 4. Play Store wali AAB file upload karna
     - name: Upload Signed AAB (Play Store)
       uses: actions/upload-artifact@v4
       with:
         name: BoxBlast-PlayStore-AAB
         path: ${{steps.sign_aab.outputs.signedReleaseFile}}
 
+    # 5. Free Stores wali APK file upload karna
     - name: Upload Signed APK (Free Stores)
       uses: actions/upload-artifact@v4
       with:
