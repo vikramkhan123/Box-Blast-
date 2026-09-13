@@ -1,35 +1,127 @@
 package com.example
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-// Aapke baki imports yahan aayenge...
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.sin
 
-class LevelSelectionActivity : AppCompatActivity() {
-
-    // Aapka max unlocked level track karne ka variable (e.g. 14)
-    private var currentUnlockedLevel: Int = 14 
+class LevelSelectionActivity : ComponentActivity() {
+    private lateinit var soundManager: SoundManager
+    private var maxLevelState by mutableIntStateOf(1)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_level_selection) // Yahan aapka layout naam aayega
+        soundManager = SoundManager(this)
+        val prefs = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE)
+        maxLevelState = prefs.getInt("MaxAdventureLevel", prefs.getInt("AdventureLevel", 1))
 
-        val recyclerView: RecyclerView = findViewById(R.id.recyclerViewLevels) // Apni ID check karein
+        setContent {
+            Box(modifier = Modifier.fillMaxSize()) {
+                LevelNeonBackground() 
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 10.dp), contentAlignment = Alignment.Center) {
+                        Text(text = "ADVENTURE MAP", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    val scrollState = rememberLazyListState()
+                    
+                    // AUTO-SCROLL LOGIC: Seedha current level par focus karega
+                    LaunchedEffect(maxLevelState) {
+                        val targetIndex = if (maxLevelState > 0) maxLevelState - 1 else 0
+                        scrollState.scrollToItem(targetIndex)
+                    }
+
+                    LazyColumn(
+                        state = scrollState, modifier = Modifier.fillMaxSize(),
+                        reverseLayout = true, contentPadding = PaddingValues(vertical = 40.dp)
+                    ) {
+                        items(500) { index -> 
+                            val level = index + 1
+                            val isUnlocked = level <= maxLevelState
+                            val isCurrent = level == maxLevelState
+                            val xOffset = (sin(index * 0.7) * 120).dp
+
+                            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                                if (level < 500) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val nextOffset = (sin((index + 1) * 0.7) * 120).dp.toPx()
+                                        val currentOffset = xOffset.toPx()
+                                        drawLine(color = Color(0x66FFFFFF), start = Offset(size.width / 2 + currentOffset, size.height / 2), end = Offset(size.width / 2 + nextOffset, -size.height / 2), strokeWidth = 15f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f))
+                                    }
+                                }
+                                
+                                // MORPHISM UI LOGIC: Semi-transparent glass gradients added
+                                val bgBrush = if (isCurrent) {
+                                    Brush.radialGradient(listOf(Color(0xFFFFF176), Color(0xFFFFB74D))) // Bright yellow for current
+                                } else if (isUnlocked) {
+                                    Brush.radialGradient(listOf(Color(0x80FFFFFF), Color(0x33FFFFFF))) // Glassmorphism
+                                } else {
+                                    Brush.radialGradient(listOf(Color(0x40555555), Color(0x1A222222))) // Dark Glass
+                                }
+
+                                Box(
+                                    modifier = Modifier.offset(x = xOffset).size(if (isCurrent) 85.dp else 65.dp).clip(CircleShape)
+                                        .background(bgBrush)
+                                        .border(2.dp, if (isUnlocked) Color(0x80FFFFFF) else Color(0x40FFFFFF), CircleShape) // Light Stroke
+                                        .clickable(enabled = isUnlocked) {
+                                            soundManager.playBtnClick()
+                                            prefs.edit().putInt("CurrentPlayingLevel", level).apply()
+                                            startActivity(Intent(this@LevelSelectionActivity, AdventureGameActivity::class.java))
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isUnlocked) Text(text = "$level", color = Color.White, fontSize = if (isCurrent) 32.sp else 24.sp, fontWeight = FontWeight.Bold)
+                                    else Text(text = "🔒", fontSize = 24.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    override fun onResume() { 
+        super.onResume()
+        maxLevelState = getSharedPreferences("BoxBlastPrefs", Context.MODE_PRIVATE).getInt("MaxAdventureLevel", 1)
+        soundManager.playBGM() 
+    }
+    override fun onPause() { super.onPause(); soundManager.pauseBGM() }
+    override fun onDestroy() { super.onDestroy(); soundManager.release() }
+}
+
+@Composable
+fun LevelNeonBackground() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val time by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 1000f, animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing)))
+    Canvas(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
+        val cx1 = size.width / 2f + kotlin.math.sin(time / 150f) * 350f
+        val cy1 = size.height / 3f + kotlin.math.cos(time / 120f) * 350f
+        drawRect(Brush.radialGradient(listOf(Color(0x77E94560), Color(0x00E94560)), Offset(cx1, cy1), 900f))
         
-        // Layout Manager setup
-        val layoutManager = LinearLayoutManager(this)
-        recyclerView.layoutManager = layoutManager
-
-        // Yahan aap apna adapter set karenge
-        // val adapter = LevelAdapter(...)
-        // recyclerView.adapter = adapter
-
-        // --- AUTO SCROLL LOGIC ---
-        // Jaise hi activity khule, seedha current level par scroll karein
-        val targetPosition = if (currentUnlockedLevel > 0) currentUnlockedLevel - 1 else 0
-        
-        // scrollToPositionWithOffset seedha us item ko screen pe le aayega bina animation ke
-        layoutManager.scrollToPositionWithOffset(targetPosition, 100) 
+        val cx2 = size.width / 2f + kotlin.math.cos(time / 140f) * 400f
+        val cy2 = size.height / 1.5f + kotlin.math.sin(time / 160f) * 400f
+        drawRect(Brush.radialGradient(listOf(Color(0x770F80FF), Color(0x000F80FF)), Offset(cx2, cy2), 1000f))
     }
 }
