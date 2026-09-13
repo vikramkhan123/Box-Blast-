@@ -16,6 +16,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
+// Updated AdventureGameView with Light Colors, Random Blasts, and Full Box Highlights
 class AdventureGameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
 
     val soundManager = SoundManager(context)
@@ -45,25 +46,37 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
+    // --- LIGHT THEME COLORS UPDATE ---
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE2E8F0.toInt(); style = Paint.Style.FILL } 
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0C4DE.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
+    private val emptyPaint = Paint().apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL } // White Boxes
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 6f }
+    
+    // --- HIGHLIGHT FILL UPDATE ---
+    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; alpha = 150 } 
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
 
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
     private var trayY = 0f; private var trayCellSize = 0f
     private val restartBtnRect = RectF(); private val menuBtnRect = RectF()
 
+    // --- SHAPE PROBABILITIES UPDATE ---
     val SHAPES = listOf(
         arrayOf(intArrayOf(1)), arrayOf(intArrayOf(1, 1)), arrayOf(intArrayOf(1), intArrayOf(1)),
         arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(1, 1, 1)),
         arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1, 1, 1, 1)),
-        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)), arrayOf(intArrayOf(0, 1), intArrayOf(1, 1)), 
-        arrayOf(intArrayOf(1, 1), intArrayOf(1, 0)), arrayOf(intArrayOf(1, 1), intArrayOf(0, 1))
+        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)), // Reduced 3-box triangles
+        // 5-box triangles
+        arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(1, 1, 1), intArrayOf(0, 1, 0)),
+        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(1, 0)), arrayOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(0, 1)),
+        // 6-box
+        arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)),
+        arrayOf(intArrayOf(1, 1), intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(1, 1), intArrayOf(1, 1), intArrayOf(1, 1)),
+        // 9-box
+        arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1), intArrayOf(1, 1, 1))
     )
 
     class Shape(val matrix: Array<IntArray>) { val rows = matrix.size; val cols = matrix[0].size; var cx = 0f; var cy = 0f; var placed = false }
@@ -135,7 +148,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
                 for (r in 0 until Math.min(8, rows.size)) { 
                     val cols = rows[r].split(",")
                     for (c in 0 until Math.min(8, cols.size)) {
-                        grid[r][c] = cols[c].toInt() 
+                        grid[r][c] = cols[c].toIntOrNull() ?: 0 
                     } 
                 } 
             }
@@ -161,7 +174,6 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             if (trayShapes[i] == null || trayShapes[i]!!.placed) {
                 var safeShape: Shape? = null
                 for (attempt in 0..20) { 
-                    // BUG FIXED HERE!
                     val rawM = SHAPES.random() 
                     val testShape = Shape(Array(rawM.size) { r -> IntArray(rawM[r].size) { c -> if (rawM[r][c] == 1) Random.nextInt(1, 6) else 0 } })
                     if (canFitAnywhere(testShape)) { safeShape = testShape; break } 
@@ -252,9 +264,9 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
         for (r in 0 until 8) for (c in 0 until 8) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
+            // White empty paint applied here
             canvas.drawRoundRect(RectF(cx + 4, cy + 4, cx + cellSize - 4, cy + cellSize - 4), 12f, 12f, emptyPaint)
             if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
         }
@@ -337,13 +349,19 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) drawGlassy3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c])
     }
 
+    // --- NEON HIGHLIGHT UPDATE ---
     private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         var firstColorId = 0
         for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
         var neonColor = getBaseColor(if (firstColorId >= 10) firstColorId - 9 else firstColorId)
         if (firstColorId >= 10) neonColor = Color.YELLOW 
-        neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
-        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
+        
+        neonShadowPaint.color = neonColor
+        neonShadowPaint.alpha = 150 // Fill opacity
+        neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
+        
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) 
+            canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
     }
 
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
@@ -456,6 +474,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     private fun placeShape(shape: Shape, rOff: Int, cOff: Int) { for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) grid[rOff + r][cOff + c] = shape.matrix[r][c]; checkLines() }
 
+    // --- RANDOM BLAST SOUND AND ANIMATION INTEGRATION ---
     private fun checkLines() {
         val rows = mutableListOf<Int>(); val cols = mutableListOf<Int>()
         for (r in 0 until 8) if ((0 until 8).all { c -> grid[r][c] != 0 }) rows.add(r)
@@ -463,7 +482,13 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         val total = rows.size + cols.size
 
         if (total > 0) {
-            soundManager.playClear(); vibratePhone(100L) 
+            val themes = listOf("normal", "pop", "melt", "broken", "burn", "lightning", "coke")
+            val randomTheme = themes.random()
+            
+            // Random Blast Sound Play hoga
+            soundManager.playBlastSound(randomTheme)
+            vibratePhone(100L) 
+            
             handler.postDelayed({ val word = soundManager.playComboVoice(total); floatingWords.add(FloatingWord(word, boardY + boardSize/2f)) }, 900)
 
             for (r in rows) { glowLines.add(GlowLine(true, r)); for (c in 0 until 8) { val id = grid[r][c]; if (id>=10) flyingGems.add(FlyingGem(boardX+c*cellSize, boardY+r*cellSize, id)); grid[r][c] = 0 } }
