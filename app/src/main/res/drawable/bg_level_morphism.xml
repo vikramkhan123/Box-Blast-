@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    
+    <!-- Semi-transparent light color (Glass effect) -->
+    <solid android:color="#4DFFFFFF" /> 
+    
+    <!-- Corner radius for smooth edges -->
+    <corners android:radius="16dp" />
+    
+    <!-- Light border to enhance the morphism look -->
+    <stroke 
+        android:width="1.5dp" 
+        android:color="#80FFFFFF" />
+</shape>
