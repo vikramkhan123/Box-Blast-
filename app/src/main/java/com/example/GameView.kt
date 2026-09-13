@@ -28,6 +28,8 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private var showResumePopup = false
     private val resumeBtnRect = RectF(); private val newGameBtnRect = RectF(); private val shuffleBtnRect = RectF()
+    
+    private var totalBlastsCounter = 0 // 10-BLAST LOGIC COUNTER
 
     data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
     private val particles = mutableListOf<Particle>()
@@ -38,25 +40,42 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
+    // LIGHT COLOR UPDATE HERE
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE2E8F0.toInt(); style = Paint.Style.FILL } // Light Blue-Grey BG
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0C4DE.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f } // Light Border
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    // Empty Box ko Usse Bhi Light (White) Kar Diya Hai aur Fill set kiya hai
+    private val emptyPaint = Paint().apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL } 
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 6f }
+    
+    // HIGHLIGHT UPDATE HERE (Fill instead of stroke)
+    private val neonShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; alpha = 120 } 
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
 
     private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
     private var trayY = 0f; private var trayCellSize = 0f
     private val restartBtnRect = RectF(); private val menuBtnRect = RectF()
 
+    // SHAPES ARRAY UPDATE: 3-box decreased, 5, 6, 9 increased
     val SHAPES = listOf(
         arrayOf(intArrayOf(1)), arrayOf(intArrayOf(1, 1)), arrayOf(intArrayOf(1), intArrayOf(1)),
         arrayOf(intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(1, 1, 1)),
         arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1, 1, 1, 1)),
-        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)), arrayOf(intArrayOf(0, 1), intArrayOf(1, 1)), 
-        arrayOf(intArrayOf(1, 1), intArrayOf(1, 0)), arrayOf(intArrayOf(1, 1), intArrayOf(0, 1))
+        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)), // Only 1 triangle 3-box kept
+        
+        // 5-box triangles
+        arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(1, 1, 1), intArrayOf(0, 1, 0)),
+        arrayOf(intArrayOf(1, 0), intArrayOf(1, 1), intArrayOf(1, 0)), arrayOf(intArrayOf(0, 1), intArrayOf(1, 1), intArrayOf(0, 1)),
+        
+        // 6-box (2x3 and 3x2)
+        arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)), arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)),
+        arrayOf(intArrayOf(1, 1), intArrayOf(1, 1), intArrayOf(1, 1)), arrayOf(intArrayOf(1, 1), intArrayOf(1, 1), intArrayOf(1, 1)),
+        
+        // 9-box
+        arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)),
+        arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1), intArrayOf(1, 1, 1))
     )
     class Shape(val matrix: Array<IntArray>) { val rows = matrix.size; val cols = matrix[0].size; var cx = 0f; var cy = 0f; var placed = false }
     private val trayShapes = arrayOfNulls<Shape>(3)
@@ -99,7 +118,6 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
-    // CRASH FIX: Safe loading with minOf boundaries and toIntOrNull
     private fun loadGame() {
         try {
             score = prefs.getInt("ClassicScore", 0)
@@ -114,11 +132,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            restartGame() // Agar save corrupt hai, toh naya game safely chal jayega
-            return
-        }
+        } catch (e: Exception) { e.printStackTrace(); restartGame(); return }
         for (i in 0 until 3) trayShapes[i] = null; fillTray()
     }
 
@@ -211,9 +225,10 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
+        // Empty box setup modified for Light background
         for (r in 0 until 8) for (c in 0 until 8) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
+            // Fill light color for empty slots
             canvas.drawRoundRect(RectF(cx + 4, cy + 4, cx + cellSize - 4, cy + cellSize - 4), 12f, 12f, emptyPaint)
             if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
         }
@@ -274,12 +289,18 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) drawGlassy3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c])
     }
 
+    // FULL BOX HIGHLIGHT IMPLEMENTATION
     private fun drawNeonShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         var firstColorId = 0
         for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
         val neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
-        neonShadowPaint.color = neonColor; neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
-        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
+        
+        neonShadowPaint.color = neonColor
+        neonShadowPaint.alpha = 150 // Transparency added to fill
+        neonShadowPaint.setShadowLayer(25f, 0f, 0f, neonColor)
+        
+        for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) 
+            canvas.drawRoundRect(RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4), 12f, 12f, neonShadowPaint)
     }
 
     private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
@@ -354,6 +375,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private fun placeShape(shape: Shape, rOff: Int, cOff: Int) { for (r in 0 until shape.rows) for (c in 0 until shape.cols) if (shape.matrix[r][c] != 0) { grid[rOff + r][cOff + c] = shape.matrix[r][c] }; score += 10; checkLines() }
 
+    // THEME AND ANIMATION LOGIC ADDED HERE
     private fun checkLines() {
         val rows = mutableListOf<Int>(); val cols = mutableListOf<Int>()
         for (r in 0 until 8) if ((0 until 8).all { c -> grid[r][c] != 0 }) rows.add(r)
@@ -361,7 +383,12 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         val total = rows.size + cols.size
 
         if (total > 0) {
-            soundManager.playClear(); vibratePhone(100L)
+            totalBlastsCounter++
+            val themes = listOf("normal", "pop", "melt", "broken", "burn", "lightning", "coke")
+            val currentTheme = themes[(totalBlastsCounter / 10) % themes.size] // Har 10 blast pe naya theme
+
+            soundManager.playBlastSound(currentTheme)
+            vibratePhone(100L)
             handler.postDelayed({ val word = soundManager.playComboVoice(total); floatingWords.add(FloatingWord(word, boardY + boardSize/2f)) }, 900)
 
             for (r in rows) { glowLines.add(GlowLine(true, r)); for (c in 0 until 8) { grid[r][c] = 0 }; score += 100 }
