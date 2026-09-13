@@ -13,7 +13,6 @@ import android.view.MotionEvent
 import android.view.View
 import kotlin.random.Random
 
-// Updated TetrisGameView with Light Colors and Random Blasts[span_1](start_span)[span_1](end_span)
 class TetrisGameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
 
     val soundManager = SoundManager(context)
@@ -33,8 +32,14 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private var showResumePopup = false
     private val resumeBtnRect = RectF(); private val newGameBtnRect = RectF()
 
-    data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val color: Int)
+    // --- NEW PARTICLE SYSTEM ---
+    data class Particle(
+        var x: Float, var y: Float, var vx: Float, var vy: Float, 
+        var life: Float, var maxLife: Float, val color: Int, 
+        val type: String, var size: Float, var rotation: Float = 0f, var rotSpeed: Float = 0f
+    )
     private val particles = mutableListOf<Particle>()
+    
     data class Confetti(var x: Float, var y: Float, var vx: Float, var vy: Float, val color: Int, var size: Float, var rot: Float, var rotSpeed: Float)
     private val confettis = mutableListOf<Confetti>()
     data class GlowLine(val isRow: Boolean, val index: Int, var alpha: Float = 1f)
@@ -42,10 +47,10 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
-    // --- LIGHT THEME COLORS UPDATE ---
+    // --- LIGHT THEME COLORS ---
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE2E8F0.toInt(); style = Paint.Style.FILL } 
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0C4DE.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
-    private val emptyPaint = Paint().apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL } // White Boxes
+    private val emptyPaint = Paint().apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL } 
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     
@@ -217,9 +222,9 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        // Empty box filled with White
         for (r in 0 until ROWS) for (c in 0 until COLS) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
+            // White empty paint
             canvas.drawRoundRect(RectF(cx + 2, cy + 2, cx + cellSize - 2, cy + cellSize - 2), 8f, 8f, emptyPaint)
             if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
         }
@@ -243,12 +248,51 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             canvas.restore(); if (fw.alpha <= 0) iteratorWords.remove()
         }
 
+        // --- DRAW PARTICLES BASED ON THEME ---
         if (particles.isNotEmpty()) {
-            val iterator = particles.iterator(); val pPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            val iterator = particles.iterator()
+            val pPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
             while (iterator.hasNext()) {
-                val p = iterator.next(); pPaint.color = p.color; pPaint.alpha = (p.life * 255).toInt().coerceIn(0, 255)
-                canvas.drawCircle(p.x, p.y, cellSize * 0.15f * p.life, pPaint)
-                p.x += p.vx; p.y += p.vy; p.vy += 1.5f; p.life -= 0.03f
+                val p = iterator.next()
+                pPaint.color = p.color
+                pPaint.alpha = (255 * (p.life / p.maxLife)).toInt().coerceIn(0, 255)
+                
+                when (p.type) {
+                    "broken", "pop" -> {
+                        canvas.save()
+                        canvas.translate(p.x, p.y)
+                        canvas.rotate(p.rotation)
+                        canvas.drawRect(-p.size, -p.size, p.size, p.size, pPaint)
+                        canvas.restore()
+                        p.vy += 1.2f 
+                        p.rotation += p.rotSpeed
+                    }
+                    "lightning" -> {
+                        pPaint.strokeWidth = p.size
+                        pPaint.style = Paint.Style.STROKE
+                        canvas.drawLine(p.x, p.y, p.x - p.vx*1.5f, p.y - p.vy*1.5f, pPaint)
+                        p.vx = Random.nextFloat() * 20 - 10f
+                        p.vy = Random.nextFloat() * 20 - 10f
+                    }
+                    "burn", "coke" -> {
+                        canvas.drawCircle(p.x, p.y, p.size * (p.life / p.maxLife), pPaint)
+                        p.vy -= 0.6f 
+                    }
+                    "melt" -> {
+                        canvas.drawRoundRect(RectF(p.x - p.size/2, p.y - p.size, p.x + p.size/2, p.y + p.size), p.size/2, p.size/2, pPaint)
+                        p.vy += 0.2f 
+                        p.vx *= 0.9f 
+                    }
+                    else -> {
+                        canvas.drawCircle(p.x, p.y, p.size * (p.life / p.maxLife), pPaint)
+                        p.vy += 1.0f 
+                    }
+                }
+                
+                p.x += p.vx
+                p.y += p.vy
+                p.life -= 1f
+                
                 if (p.life <= 0) iterator.remove()
             }
         }
@@ -359,6 +403,32 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         }
     }
 
+    // --- CREATE THEME PARTICLES LOGIC ---
+    private fun createThemeParticle(x: Float, y: Float, theme: String): Particle {
+        var color = Color.WHITE
+        var size = Random.nextFloat() * 10f + 8f
+        
+        when(theme) {
+            "pop" -> color = listOf(0xFFF5DEB3.toInt(), 0xFFDEB887.toInt(), 0xFFD2B48C.toInt()).random() 
+            "melt" -> color = listOf(0xFF8B4513.toInt(), 0xFFD2691E.toInt(), 0xFFA0522D.toInt()).random() 
+            "broken" -> color = listOf(0xFFB22222.toInt(), 0xFF8B0000.toInt(), 0xFFCD5C5C.toInt()).random() 
+            "burn" -> { color = listOf(0xFFFF4500.toInt(), 0xFFFF8C00.toInt(), 0xFFFFD700.toInt()).random(); size = Random.nextFloat() * 15f + 10f } 
+            "lightning" -> { color = listOf(0xFF00FFFF.toInt(), 0xFFE0FFFF.toInt(), 0xFFFFFFFF.toInt()).random(); size = 4f }
+            "coke" -> { color = listOf(0xFF3E2723.toInt(), 0xFF4E342E.toInt(), 0xFFFFFFFF.toInt()).random(); size = Random.nextFloat() * 6f + 4f }
+            else -> color = getBaseColor(Random.nextInt(1,6))
+        }
+
+        return Particle(
+            x = x + Random.nextFloat()*20f - 10f, 
+            y = y + Random.nextFloat()*20f - 10f,
+            vx = Random.nextFloat() * 24f - 12f,
+            vy = Random.nextFloat() * 30f - 15f,
+            life = 30f, maxLife = 30f,
+            color = color, type = theme, size = size,
+            rotation = Random.nextFloat() * 360f, rotSpeed = Random.nextFloat() * 20f - 10f
+        )
+    }
+
     // --- RANDOM BLAST SOUND AND ANIMATION INTEGRATION ---
     private fun checkLines() {
         var linesCleared = 0; var r = ROWS - 1
@@ -388,7 +458,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                 val blastY = boardY + cr * cellSize + cellSize/2f
                 for (c in 0 until COLS) {
                     val blastX = boardX + c * cellSize + cellSize/2f
-                    for(i in 0..6) particles.add(Particle(blastX, blastY, Random.nextFloat()*16-8f, Random.nextFloat()*20-15f, 1f, getBaseColor(Random.nextInt(1,6))))
+                    for(i in 0..4) particles.add(createThemeParticle(blastX, blastY, randomTheme))
                 }
             }
             if (score > highScore) { 
