@@ -16,8 +16,13 @@ class SoundManager(val context: Context) {
     var voiceMagnificentId = 0; var voiceUnbelievableId = 0
     var voiceGloriousId = 0; var voiceMajesticId = 0
 
+    // New Blast Sounds
+    var burnSoundId = 0; var brokenSoundId = 0; var meltSoundId = 0
+    var popSoundId = 0; var lightningSoundId = 0; var cokeSoundId = 0
+
     private var bgmPlayer: MediaPlayer? = null
     private var tickStreamId = 0 
+    private var voiceCounter = 0 // VOICE COUNTER ADD KIYA GAYA HAI
 
     init {
         val audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
@@ -36,6 +41,14 @@ class SoundManager(val context: Context) {
             voiceSuperId = soundPool.load(context, R.raw.voice_super, 1); voiceMagnificentId = soundPool.load(context, R.raw.voice_magnificent, 1)
             voiceUnbelievableId = soundPool.load(context, R.raw.voice_unbelievable, 1); voiceGloriousId = soundPool.load(context, R.raw.voice_glorious, 1)
             voiceMajesticId = soundPool.load(context, R.raw.voice_majestic, 1)
+
+            // LOAD NEW SOUNDS (Apne raw folder me files zaroor daalein)
+            // burnSoundId = soundPool.load(context, R.raw.sound_burn, 1)
+            // brokenSoundId = soundPool.load(context, R.raw.sound_broken, 1)
+            // meltSoundId = soundPool.load(context, R.raw.sound_melt, 1)
+            // popSoundId = soundPool.load(context, R.raw.sound_pop, 1)
+            // lightningSoundId = soundPool.load(context, R.raw.sound_lightning, 1)
+            // cokeSoundId = soundPool.load(context, R.raw.sound_coke, 1)
         } catch (e: Exception) { e.printStackTrace() }
     }
 
@@ -62,19 +75,35 @@ class SoundManager(val context: Context) {
     fun playBtnClick() { if (btnClickId != 0) soundPool.play(btnClickId, 1f, 1f, 1, 0, 1f) }
 
     fun playCountdownTick() { 
-        if (countdownTickId != 0) {
-            stopCountdownTick()
-            tickStreamId = soundPool.play(countdownTickId, 1f, 1f, 1, 0, 1f) 
-        } 
+        if (countdownTickId != 0) { stopCountdownTick(); tickStreamId = soundPool.play(countdownTickId, 1f, 1f, 1, 0, 1f) } 
     }
     fun stopCountdownTick() { if (tickStreamId != 0) { soundPool.stop(tickStreamId); tickStreamId = 0 } }
 
     fun playComboVoice(linesCleared: Int): String {
+        voiceCounter++
         val pool1 = listOf(Pair(voiceGoodId, "GOOD!"), Pair(voiceExcellentId, "EXCELLENT!"), Pair(voiceSuperId, "SUPER!"))
         val pool2 = listOf(Pair(voiceMagnificentId, "MAGNIFICENT!"), Pair(voiceUnbelievableId, "UNBELIEVABLE!"), Pair(voiceGloriousId, "GLORIOUS!"), Pair(voiceMajesticId, "MAJESTIC!"))
         val selection = if (linesCleared <= 1) pool1.random() else pool2.random()
-        if (selection.first != 0) soundPool.play(selection.first, 1f, 1f, 1, 0, 1f)
+        
+        // LIMIT APPLIED: Har 3rd time hi play hoga
+        if (voiceCounter % 3 == 0 && selection.first != 0) {
+            soundPool.play(selection.first, 1f, 1f, 1, 0, 1f)
+        }
         return selection.second
+    }
+
+    // NEW BLAST SOUND LOGIC
+    fun playBlastSound(type: String) {
+        val soundIdToPlay = when(type) {
+            "burn" -> burnSoundId
+            "broken" -> brokenSoundId
+            "melt" -> meltSoundId
+            "pop" -> popSoundId
+            "lightning" -> lightningSoundId
+            "coke" -> cokeSoundId
+            else -> clearSoundId // fallback normal sound
+        }
+        if (soundIdToPlay != 0) soundPool.play(soundIdToPlay, 1f, 1f, 1, 0, 1f)
     }
 
     fun release() { soundPool.release(); stopBGM() }
