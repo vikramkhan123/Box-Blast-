@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import kotlin.random.Random
 
+// Updated TetrisGameView with Light Colors and Random Blasts[span_1](start_span)[span_1](end_span)
 class TetrisGameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
 
     val soundManager = SoundManager(context)
@@ -41,11 +42,13 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xAA0B132B.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF42E5FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
+    // --- LIGHT THEME COLORS UPDATE ---
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE2E8F0.toInt(); style = Paint.Style.FILL } 
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB0C4DE.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
+    private val emptyPaint = Paint().apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL } // White Boxes
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
+    
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
@@ -57,7 +60,6 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private val btnDown = RectF(); private val btnRight = RectF()
     private val restartBtnRect = RectF(); private val menuBtnRect = RectF()
 
-    // 4-BLOCK MULTIPLIED FOR HIGHER CHANCE!
     val SHAPES = listOf(
         arrayOf(intArrayOf(1, 1, 1, 1)), arrayOf(intArrayOf(1, 1, 1, 1)), arrayOf(intArrayOf(1, 1, 1, 1)), 
         arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), arrayOf(intArrayOf(1), intArrayOf(1), intArrayOf(1), intArrayOf(1)), 
@@ -98,7 +100,6 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         nextPiece = generatePiece(); spawnPiece(); handler.removeCallbacks(gameLoop); handler.postDelayed(gameLoop, speedMs)
     }
 
-    // CRASH FIX: minOf Boundaries
     private fun loadGame() {
         try {
             score = prefs.getInt("TetrisScore", 0); hsRewardGiven = prefs.getBoolean("TetrisHSReward", false)
@@ -216,7 +217,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        val emptyPaint = Paint().apply { color = 0x2AFFFFFF; style = Paint.Style.STROKE; strokeWidth = 2f }
+        // Empty box filled with White
         for (r in 0 until ROWS) for (c in 0 until COLS) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
             canvas.drawRoundRect(RectF(cx + 2, cy + 2, cx + cellSize - 2, cy + cellSize - 2), 8f, 8f, emptyPaint)
@@ -358,6 +359,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         }
     }
 
+    // --- RANDOM BLAST SOUND AND ANIMATION INTEGRATION ---
     private fun checkLines() {
         var linesCleared = 0; var r = ROWS - 1
         val clearedRows = mutableListOf<Int>()
@@ -371,7 +373,12 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             } else r--
         }
         if (linesCleared > 0) {
-            soundManager.playClear(); vibratePhone(150L); 
+            val themes = listOf("normal", "pop", "melt", "broken", "burn", "lightning", "coke")
+            val randomTheme = themes.random()
+            
+            soundManager.playBlastSound(randomTheme)
+            vibratePhone(150L); 
+            
             handler.postDelayed({ val word = soundManager.playComboVoice(linesCleared); floatingWords.add(FloatingWord(word, boardY + boardSizeH/2f)) }, 900)
             
             score += (linesCleared * 100) * linesCleared; speedMs = maxOf(150L, speedMs - 20L)
