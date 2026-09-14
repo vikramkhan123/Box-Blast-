@@ -30,11 +30,31 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     private val targetGems = mutableMapOf<Int, Int>()
     private val gemsCollected = mutableMapOf<Int, Int>()
     
-    private var isLevelComplete = false; private var isWaitingForAd = false
-    private var adCountdown = 10; private var isGameOver = false; private var earnedCoins = 0
+    private var isLevelComplete = false
+    private var isWaitingForAd = false
+    private var adCountdown = 10
+    private var isGameOver = false
+    private var earnedCoins = 0
     private var showResumePopup = false
-    private val resumeBtnRect = RectF(); private val newGameBtnRect = RectF()
+    private val resumeBtnRect = RectF()
+    private val newGameBtnRect = RectF()
     private val shuffleBtnRect = RectF()
+
+    // 10 Light Aesthetic Color Schemes
+    data class ColorTheme(val bg: Int, val boardBg: Int, val boardBorder: Int, val textPrimary: Int, val textSecondary: Int)
+    private val COLOR_THEMES = listOf(
+        ColorTheme(0xFFE8EEF5.toInt(), 0xFFFAFCFF.toInt(), 0xFFC9D8E6.toInt(), 0xFF1E293B.toInt(), 0xFF64748B.toInt()),
+        ColorTheme(0xFFF7ECE1.toInt(), 0xFFFFFDF9.toInt(), 0xFFE6D2C0.toInt(), 0xFF4A3525.toInt(), 0xFF8C715A.toInt()),
+        ColorTheme(0xFFE9F5ED.toInt(), 0xFFFBFFFC.toInt(), 0xFFCDE4D4.toInt(), 0xFF1B4332.toInt(), 0xFF52796F.toInt()),
+        ColorTheme(0xFFF5EBF7.toInt(), 0xFFFEFAFF.toInt(), 0xFFE2CCE6.toInt(), 0xFF3C1642.toInt(), 0xFF7B5080.toInt()),
+        ColorTheme(0xFFFDF0ED.toInt(), 0xFFFFF9F8.toInt(), 0xFFF2D1CA.toInt(), 0xFF4A1E17.toInt(), 0xFF8C5B53.toInt()),
+        ColorTheme(0xFFE6F3F7.toInt(), 0xFFF7FDFF.toInt(), 0xFFC3DFE8.toInt(), 0xFF0F3443.toInt(), 0xFF4A7282.toInt()),
+        ColorTheme(0xFFF9F7E8.toInt(), 0xFFFFFFFA.toInt(), 0xFFEAE5BE.toInt(), 0xFF3D3A1B.toInt(), 0xFF7D774D.toInt()),
+        ColorTheme(0xFFECEEF8.toInt(), 0xFFFBFCFF.toInt(), 0xFFCCD1EB.toInt(), 0xFF1D2447.toInt(), 0xFF565F87.toInt()),
+        ColorTheme(0xFFF3F1EC.toInt(), 0xFFFAF9F6.toInt(), 0xFFD8D3C5.toInt(), 0xFF363228.toInt(), 0xFF6E685B.toInt()),
+        ColorTheme(0xFFE5F5F3.toInt(), 0xFFF5FFFE.toInt(), 0xFFBFE5E0.toInt(), 0xFF0D3B36.toInt(), 0xFF467570.toInt())
+    )
+    private var activePaletteIndex = 0
 
     enum class BlastType { LIGHTNING, MELT, POP, BROKEN, BURN, COKE }
 
@@ -51,19 +71,22 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
-    // Light Pastel Palette
-    private val bgColor = 0xFFF2F5F8.toInt()
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC9D8E5.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 8f }
     private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
 
-    private var cellSize = 0f; private var boardSize = 0f; private var boardX = 0f; private var boardY = 0f
-    private var trayY = 0f; private var trayCellSize = 0f
-    private val restartBtnRect = RectF(); private val menuBtnRect = RectF()
+    private var cellSize = 0f
+    private var boardSize = 0f
+    private var boardX = 0f
+    private var boardY = 0f
+    private var trayY = 0f
+    private var trayCellSize = 0f
+    private val restartBtnRect = RectF()
+    private val menuBtnRect = RectF()
 
     // Upgraded Shapes Matrix
     val SHAPES = listOf(
@@ -95,9 +118,13 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     class Shape(val matrix: Array<IntArray>) { val rows = matrix.size; val cols = matrix[0].size; var cx = 0f; var cy = 0f; var placed = false }
 
     private val trayShapes = arrayOfNulls<Shape>(3)
-    private var draggingShapeIndex = -1; private var draggingShape: Shape? = null
-    private var dragTouchOffsetX = 0f; private var dragTouchOffsetY = 0f
-    private var hoverRow = -1; private var hoverCol = -1; private var canFitHover = false
+    private var draggingShapeIndex = -1
+    private var draggingShape: Shape? = null
+    private var dragTouchOffsetX = 0f
+    private var dragTouchOffsetY = 0f
+    private var hoverRow = -1
+    private var hoverCol = -1
+    private var canFitHover = false
 
     private val renderLoop = object : Runnable { override fun run() { invalidate(); handler.postDelayed(this, 16L) } }
     private val timerRunnable = object : Runnable {
@@ -112,6 +139,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     }
 
     init { 
+        activePaletteIndex = (currentLevel - 1) % COLOR_THEMES.size
         if (prefs.getBoolean("AdvSaved", false)) { 
             showResumePopup = true
             getAvailableGemTypes().forEach { targetGems[it] = 10; gemsCollected[it] = 0 } 
@@ -129,7 +157,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         return false 
     }
 
-    private fun vibratePhone(duration: Long = 60L) { 
+    private fun vibratePhone(duration: Long = 70L) { 
         try { 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
                 vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) 
@@ -150,9 +178,12 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     private fun initLevel() {
         val totalTarget = 10 + (currentLevel * 2)
-        val gemTypes = getAvailableGemTypes(); val targetPerGem = totalTarget / gemTypes.size
-        targetGems.clear(); gemsCollected.clear(); gemTypes.forEach { type -> targetGems[type] = targetPerGem; gemsCollected[type] = 0 }
+        val gemTypes = getAvailableGemTypes()
+        val targetPerGem = totalTarget / gemTypes.size
+        targetGems.clear(); gemsCollected.clear()
+        gemTypes.forEach { type -> targetGems[type] = targetPerGem; gemsCollected[type] = 0 }
         isGameOver = false; isLevelComplete = false; isWaitingForAd = false; adCountdown = 10; earnedCoins = 0
+        activePaletteIndex = (currentLevel - 1) % COLOR_THEMES.size
         flyingGems.clear(); particles.clear(); glowLines.clear(); floatingWords.clear()
         for (r in 0 until 8) for (c in 0 until 8) grid[r][c] = 0
         prefs.edit().putBoolean("AdvSaved", false).apply()
@@ -231,8 +262,8 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         boardSize = w - 60f; cellSize = boardSize / 8; boardX = 30f; boardY = 280f
-        trayY = boardY + boardSize + 100f; trayCellSize = cellSize * 0.65f
-        val bw = 600f; val bh = 130f; val cx = w/2f
+        trayY = boardY + boardSize + 90f; trayCellSize = cellSize * 0.65f
+        val bw = 600f; val bh = 130f; val cx = w / 2f
         restartBtnRect.set(cx - bw/2f, boardY + boardSize/2f + 40f, cx + bw/2f, boardY + boardSize/2f + 40f + bh)
         menuBtnRect.set(cx - bw/2f, restartBtnRect.bottom + 30f, cx + bw/2f, restartBtnRect.bottom + 30f + bh)
         resumeBtnRect.set(cx - bw/2f, boardY + boardSize/2f - 60f, cx + bw/2f, boardY + boardSize/2f - 60f + bh)
@@ -275,9 +306,12 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(bgColor)
+        val palette = COLOR_THEMES[activePaletteIndex]
+        
+        // 1. Light Outer Background
+        canvas.drawColor(palette.bg)
 
-        drawGlossy3DText(canvas, "LEVEL $currentLevel", width/2f, 90f, 0xFF2B3A4A.toInt(), 0xFFB0C4DE.toInt(), 65f)
+        drawGlossy3DText(canvas, "LEVEL $currentLevel", width/2f, 90f, palette.textPrimary, palette.boardBorder, 65f)
         
         val currentCoins = prefs.getInt("BoxBlastCoins", 0)
         drawCoinIcon(canvas, width - 150f, 70f, 25f)
@@ -289,10 +323,13 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             val cx = spacing * (index + 1)
             drawGemShape(canvas, cx - 25f, 130f, 50f, type)
             val collected = minOf(gemsCollected[type] ?: 0, targetGems[type] ?: 0)
-            drawGlossy3DText(canvas, "$collected/${targetGems[type]}", cx, 220f, 0xFF2B3A4A.toInt(), 0xFFCAD8E6.toInt(), 40f)
+            drawGlossy3DText(canvas, "$collected/${targetGems[type]}", cx, 220f, palette.textPrimary, palette.boardBorder, 40f)
         }
 
+        // 2. Light Inner Game Board (Bg se bhi halka)
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
+        boardPaint.color = palette.boardBg
+        boardBorderPaint.color = palette.boardBorder
         canvas.drawRoundRect(rect, 24f, 24f, boardPaint)
         canvas.drawRoundRect(rect, 24f, 24f, boardBorderPaint)
 
@@ -304,7 +341,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        val emptyPaint = Paint().apply { color = 0x1E000000; style = Paint.Style.STROKE; strokeWidth = 2f }
+        val emptyPaint = Paint().apply { color = 0x18000000; style = Paint.Style.STROKE; strokeWidth = 2f }
         for (r in 0 until 8) for (c in 0 until 8) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
             canvas.drawRoundRect(RectF(cx + 4, cy + 4, cx + cellSize - 4, cy + cellSize - 4), 12f, 12f, emptyPaint)
@@ -416,7 +453,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
             drawGlossy3DText(canvas, "$adCountdown", width / 2f, boardY + boardSize / 2f + 60f, Color.WHITE, Color.DKGRAY, 150f)
             draw3DButton(canvas, menuBtnRect, "▶ WATCH AD (1 CHANCE)", 0xFF3498DB.toInt(), 0xFF1B4F72.toInt(), 40f)
         } else if (isGameOver) {
-            canvas.drawColor(0xDD000000.toInt())
+            canvas.drawColor(0xEE000000.toInt())
             drawGlossy3DText(canvas, "GAME OVER", width / 2f, boardY + boardSize / 2f - 120f, 0xFFE74C3C.toInt(), 0xFF922B21.toInt(), 110f)
             draw3DButton(canvas, restartBtnRect, "RESTART", 0xFFE74C3C.toInt(), 0xFF922B21.toInt())
             draw3DButton(canvas, menuBtnRect, "MAIN MENU", 0xFFF39C12.toInt(), 0xFFB9770E.toInt())
@@ -435,7 +472,7 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         if (firstColorId >= 10) neonColor = Color.YELLOW 
         
         val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(85, Color.red(neonColor), Color.green(neonColor), Color.blue(neonColor))
+            color = Color.argb(90, Color.red(neonColor), Color.green(neonColor), Color.blue(neonColor))
             style = Paint.Style.FILL
         }
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -591,7 +628,8 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
         val total = rows.size + cols.size
 
         if (total > 0) {
-            soundManager.playClear()
+            val randomBlast = BlastType.values().random()
+            soundManager.playBlastSound(randomBlast.name)
             vibratePhone(100L) // Line clear vibration
 
             handler.postDelayed({ 
@@ -601,21 +639,19 @@ class AdventureGameView @JvmOverloads constructor(context: Context, attrs: Attri
 
             for (r in rows) { 
                 glowLines.add(GlowLine(true, r))
-                val randomType = BlastType.values().random()
                 for (c in 0 until 8) { 
                     val id = grid[r][c]
-                    spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, id, randomType)
+                    spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, id, randomBlast)
                     if (id >= 10) flyingGems.add(FlyingGem(boardX + c * cellSize, boardY + r * cellSize, id))
                     grid[r][c] = 0 
                 } 
             }
             for (c in cols) { 
                 glowLines.add(GlowLine(false, c))
-                val randomType = BlastType.values().random()
                 for (r in 0 until 8) { 
                     val id = grid[r][c]
                     if (id != 0) {
-                        spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, id, randomType)
+                        spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, id, randomBlast)
                         if (id >= 10) flyingGems.add(FlyingGem(boardX + c * cellSize, boardY + r * cellSize, id))
                         grid[r][c] = 0 
                     }
