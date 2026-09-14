@@ -35,7 +35,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private val newGameBtnRect = RectF()
     private val shuffleBtnRect = RectF()
 
-    // 10 Themes: Background aur Board (Usse bhi light)
+    // 10 Light Aesthetic Color Schemes (Outer BG + Inner Board)
     data class ColorTheme(val bg: Int, val boardBg: Int, val boardBorder: Int, val textPrimary: Int, val textSecondary: Int)
     private val COLOR_THEMES = listOf(
         ColorTheme(0xFFE8EEF5.toInt(), 0xFFFAFCFF.toInt(), 0xFFC9D8E6.toInt(), 0xFF1E293B.toInt(), 0xFF64748B.toInt()), // Ice Blue
@@ -51,18 +51,25 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     )
     private var activePaletteIndex = 0
 
-    // Classic Mode 10-Blasts Theme Cycle
-    enum class ThemeType(val blastName: String, val displayName: String) {
-        NORMAL("POP", "NORMAL"),
-        BISCUIT("POP", "BISCUIT"),
-        CHOCOLATE("MELT", "CHOCOLATE"),
-        BRICK("BROKEN", "BRICK"),
-        WOOD("BROKEN", "WOOD"),
-        KEROSENE("BURN", "KEROSENE"),
-        COKE("COKE", "COKE")
+    // User Images mapped with sounds and blast types
+    enum class ThemeType(val blastName: String, val resName: String, val displayName: String) {
+        DONUT("MELT", "block_chocolate", "CHOCOLATE"),
+        COOKIE("POP", "block_biscuit", "BISCUIT"),
+        BRICK("BROKEN", "block_brick", "BRICK"),
+        WOOD("BROKEN", "block_wood", "WOOD"),
+        BOMB("BURN", "block_kerosene", "KEROSENE"),
+        SODA("COKE", "block_coke", "COKE"),
+        LEMON("POP", "block_lemon", "LEMON"),
+        CANDY("POP", "block_candy", "CANDY"),
+        ORANGE("POP", "block_orange", "ORANGE"),
+        MIRROR("BROKEN", "block_mirror", "MIRROR")
     }
     private var currentThemeIndex = 0
     private var totalBlastsCount = 0
+
+    // Bitmap Cache
+    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
+    private val themeBitmaps = mutableMapOf<ThemeType, Bitmap?>()
 
     enum class BlastType { LIGHTNING, MELT, POP, BROKEN, BURN, COKE }
 
@@ -81,8 +88,6 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 8f }
-    private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
@@ -96,7 +101,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     private val restartBtnRect = RectF()
     private val menuBtnRect = RectF()
 
-    // Upgraded Shapes Matrix (Triangle ratio reduced; 6, 5, and 9 blocks added)
+    // Upgraded Shapes Matrix: Triangle ratio reduced; 6, 5, and 9-block matrices added
     val SHAPES = listOf(
         arrayOf(intArrayOf(1)),
         arrayOf(intArrayOf(1, 1)),
@@ -110,13 +115,13 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         // 6-block rectangles (3x2 and 2x3)
         arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)),
         arrayOf(intArrayOf(1, 1), intArrayOf(1, 1), intArrayOf(1, 1)),
-        // 9-block giant (3x3)
+        // 9-block full 3x3 matrix
         arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 1, 1), intArrayOf(1, 1, 1)),
-        // 5-block (Cross, T, Steps)
+        // 5-block (Cross, T, and Steps)
         arrayOf(intArrayOf(0, 1, 0), intArrayOf(1, 1, 1), intArrayOf(0, 1, 0)),
         arrayOf(intArrayOf(1, 1, 1), intArrayOf(0, 1, 0), intArrayOf(0, 1, 0)),
         arrayOf(intArrayOf(1, 1, 1), intArrayOf(1, 0, 0), intArrayOf(1, 0, 0)),
-        // Triangle/Corner shapes (Kept to minimal 1-count)
+        // Rare Corner shapes (Single count)
         arrayOf(intArrayOf(1, 0), intArrayOf(1, 1)),
         arrayOf(intArrayOf(0, 1), intArrayOf(1, 1)),
         arrayOf(intArrayOf(1, 1), intArrayOf(1, 0)),
@@ -146,9 +151,18 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
     }
 
     init { 
+        loadThemeBitmaps()
         activePaletteIndex = Random.nextInt(COLOR_THEMES.size)
         if (prefs.getBoolean("ClassicSaved", false)) showResumePopup = true else restartGame()
         handler.post(renderLoop) 
+    }
+
+    private fun loadThemeBitmaps() {
+        val res = context.resources
+        for (theme in ThemeType.values()) {
+            val id = res.getIdentifier(theme.resName, "drawable", context.packageName)
+            themeBitmaps[theme] = if (id != 0) BitmapFactory.decodeResource(res, id) else null
+        }
     }
 
     private fun useCoinsOrFreeShuffle(): Boolean { 
@@ -220,10 +234,10 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 var safeShape: Shape? = null
                 for (attempt in 0..20) { 
                     val rawM = SHAPES.random()
-                    val testShape = Shape(Array(rawM.size) { r -> IntArray(rawM[r].size) { c -> if (rawM[r][c] == 1) Random.nextInt(1, 6) else 0 } })
+                    val testShape = Shape(Array(rawM.size) { r -> IntArray(rawM[r].size) { c -> if (rawM[r][c] == 1) 1 else 0 } })
                     if (canFitAnywhere(testShape)) { safeShape = testShape; break } 
                 }
-                if (safeShape == null) safeShape = Shape(arrayOf(intArrayOf(Random.nextInt(1, 6))))
+                if (safeShape == null) safeShape = Shape(arrayOf(intArrayOf(1)))
                 trayShapes[i] = safeShape
             }
         }
@@ -296,7 +310,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         drawCoinIcon(canvas, width / 2f - 40f, 115f, 20f)
         drawGlossy3DText(canvas, "$currentCoins", width / 2f + 10f, 130f, 0xFFB8860B.toInt(), 0xFF654321.toInt(), 45f, Paint.Align.LEFT)
 
-        // 2. Light Inner Game Board (Bg se bhi halka)
+        // 2. Light Inner Game Board (Even lighter than background)
         val rect = RectF(boardX, boardY, boardX + boardSize, boardY + boardSize)
         boardPaint.color = palette.boardBg
         boardBorderPaint.color = palette.boardBorder
@@ -311,11 +325,11 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        val emptyPaint = Paint().apply { color = 0x18000000; style = Paint.Style.STROKE; strokeWidth = 2f }
+        val emptyPaint = Paint().apply { color = 0x14000000; style = Paint.Style.STROKE; strokeWidth = 2f }
         for (r in 0 until 8) for (c in 0 until 8) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
             canvas.drawRoundRect(RectF(cx + 4, cy + 4, cx + cellSize - 4, cy + cellSize - 4), 12f, 12f, emptyPaint)
-            if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
+            if (grid[r][c] != 0) drawBlock(canvas, cx, cy, cellSize)
         }
 
         // Full Surface Hover Highlight
@@ -416,15 +430,27 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private fun drawShape(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) 
-            if (shape.matrix[r][c] != 0) drawGlassy3DBlock(canvas, x + c * size, y + r * size, size, shape.matrix[r][c])
+            if (shape.matrix[r][c] != 0) drawBlock(canvas, x + c * size, y + r * size, size)
     }
 
-    // Pure Box Par Surface Highlight Shadow (Borders + Pure Box)
+    // Direct User Image Bitmap Render
+    private fun drawBlock(canvas: Canvas, x: Float, y: Float, size: Float) {
+        val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
+        val activeTheme = ThemeType.values()[currentThemeIndex]
+        val bmp = themeBitmaps[activeTheme]
+
+        if (bmp != null) {
+            canvas.drawBitmap(bmp, null, rect, bitmapPaint)
+        } else {
+            // Fallback soft color if image not found
+            val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF4A90E2.toInt(); style = Paint.Style.FILL }
+            canvas.drawRoundRect(rect, 12f, 12f, fallbackPaint)
+        }
+    }
+
+    // Full Surface Hover Neon Highlight (Whole cell fill + neon stroke)
     private fun drawFullNeonHoverShadow(canvas: Canvas, shape: Shape, x: Float, y: Float, size: Float) {
-        var firstColorId = 0
-        for (row in shape.matrix) { for (cell in row) { if (cell != 0) { firstColorId = cell; break } }; if (firstColorId != 0) break }
-        val neonColor = getBaseColor(if (firstColorId != 0) firstColorId else 1)
-        
+        val neonColor = 0xFF00B4D8.toInt()
         val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(90, Color.red(neonColor), Color.green(neonColor), Color.blue(neonColor))
             style = Paint.Style.FILL
@@ -439,37 +465,6 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             val rectBox = RectF(x + c * size + 4, y + r * size + 4, x + c * size + size - 4, y + r * size + size - 4)
             canvas.drawRoundRect(rectBox, 14f, 14f, fillPaint)
             canvas.drawRoundRect(rectBox, 14f, 14f, strokePaint)
-        }
-    }
-
-    private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
-        val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
-        val baseColor = getBaseColor(colorId)
-        val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, 
-            intArrayOf(adjustColorLightness(baseColor, 1.3f), baseColor, adjustColorLightness(baseColor, 0.7f)), 
-            null, Shader.TileMode.CLAMP)
-        blockBasePaint.shader = grad; canvas.drawRoundRect(rect, 14f, 14f, blockBasePaint); blockBasePaint.shader = null 
-        
-        val overlayRect = RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.top + size * 0.4f)
-        val shineGrad = LinearGradient(overlayRect.left, overlayRect.top, overlayRect.left, overlayRect.bottom, 0x99FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
-        glassOverlayPaint.shader = shineGrad; canvas.drawRoundRect(overlayRect, 12f, 12f, glassOverlayPaint)
-    }
-
-    private fun adjustColorLightness(color: Int, factor: Float): Int { 
-        val hsv = FloatArray(3); Color.colorToHSV(color, hsv); hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f)
-        return Color.HSVToColor(hsv) 
-    }
-
-    private fun getBaseColor(id: Int): Int {
-        val theme = ThemeType.values()[currentThemeIndex]
-        return when (theme) {
-            ThemeType.NORMAL -> when(id) { 1 -> 0xFFE74C3C.toInt(); 2 -> 0xFF3498DB.toInt(); 3 -> 0xFF2ECC71.toInt(); 4 -> 0xFFF1C40F.toInt(); 5 -> 0xFF9B59B6.toInt(); else -> 0xFF34495E.toInt() }
-            ThemeType.BISCUIT -> when(id) { 1 -> 0xFFD2B48C.toInt(); 2 -> 0xFFC68B59.toInt(); 3 -> 0xFFB3743A.toInt(); 4 -> 0xFFE0BB8E.toInt(); 5 -> 0xFFA0522D.toInt(); else -> 0xFFDEB887.toInt() }
-            ThemeType.CHOCOLATE -> when(id) { 1 -> 0xFF4B2E1E.toInt(); 2 -> 0xFF5D3A24.toInt(); 3 -> 0xFF3D2314.toInt(); 4 -> 0xFF7B3F00.toInt(); 5 -> 0xFF6F4E37.toInt(); else -> 0xFF2E1503.toInt() }
-            ThemeType.BRICK -> when(id) { 1 -> 0xFFB22222.toInt(); 2 -> 0xFF990000.toInt(); 3 -> 0xFF8B0000.toInt(); 4 -> 0xFFA52A2A.toInt(); 5 -> 0xFFC04000.toInt(); else -> 0xFF800000.toInt() }
-            ThemeType.WOOD -> when(id) { 1 -> 0xFF8B5A2B.toInt(); 2 -> 0xFFCD853F.toInt(); 3 -> 0xFFD2691E.toInt(); 4 -> 0xFF855E42.toInt(); 5 -> 0xFFA0522D.toInt(); else -> 0xFF6E473B.toInt() }
-            ThemeType.KEROSENE -> when(id) { 1 -> 0xFFFF4500.toInt(); 2 -> 0xFFFF6347.toInt(); 3 -> 0xFFFF8C00.toInt(); 4 -> 0xFFFFA500.toInt(); 5 -> 0xFFFFD700.toInt(); else -> 0xFFDC143C.toInt() }
-            ThemeType.COKE -> when(id) { 1 -> 0xFFED1C24.toInt(); 2 -> 0xFFB71234.toInt(); 3 -> 0xFFC0C0C0.toInt(); 4 -> 0xFF808080.toInt(); 5 -> 0xFFFF3333.toInt(); else -> 0xFF990000.toInt() }
         }
     }
 
@@ -543,7 +538,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
     private fun placeShape(shape: Shape, rOff: Int, cOff: Int) { 
         for (r in 0 until shape.rows) for (c in 0 until shape.cols) 
-            if (shape.matrix[r][c] != 0) { grid[rOff + r][cOff + c] = shape.matrix[r][c] }
+            if (shape.matrix[r][c] != 0) { grid[rOff + r][cOff + c] = 1 }
         score += 10; checkLines() 
     }
 
@@ -555,6 +550,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
 
         if (total > 0) {
             totalBlastsCount += total
+            // Switch theme after every 10 blasts
             val newThemeIndex = (totalBlastsCount / 10) % ThemeType.values().size
             if (newThemeIndex != currentThemeIndex) {
                 currentThemeIndex = newThemeIndex
@@ -573,7 +569,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
             for (r in rows) { 
                 glowLines.add(GlowLine(true, r))
                 for (c in 0 until 8) { 
-                    spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, grid[r][c], BlastType.valueOf(currentTheme.blastName))
+                    spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, BlastType.valueOf(currentTheme.blastName))
                     grid[r][c] = 0 
                 }
                 score += 100 
@@ -582,7 +578,7 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
                 glowLines.add(GlowLine(false, c))
                 for (r in 0 until 8) { 
                     if (grid[r][c] != 0) {
-                        spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, grid[r][c], BlastType.valueOf(currentTheme.blastName))
+                        spawnBlastParticles(boardX + c * cellSize + cellSize/2f, boardY + r * cellSize + cellSize/2f, BlastType.valueOf(currentTheme.blastName))
                         grid[r][c] = 0 
                     }
                 }
@@ -600,13 +596,20 @@ class GameView @JvmOverloads constructor(context: Context, attrs: AttributeSet? 
         }
     }
 
-    private fun spawnBlastParticles(cx: Float, cy: Float, colorId: Int, blastType: BlastType) {
-        val baseColor = getBaseColor(colorId)
+    private fun spawnBlastParticles(cx: Float, cy: Float, blastType: BlastType) {
+        val color = when (blastType) {
+            BlastType.BURN -> 0xFFFF4500.toInt()
+            BlastType.BROKEN -> 0xFF8B4513.toInt()
+            BlastType.MELT -> 0xFF4A2C11.toInt()
+            BlastType.COKE -> 0xFFE71D36.toInt()
+            BlastType.LIGHTNING -> 0xFF00E5FF.toInt()
+            BlastType.POP -> 0xFFFFD700.toInt()
+        }
         val count = if (blastType == BlastType.COKE || blastType == BlastType.LIGHTNING) 14 else 8
         for (i in 0 until count) {
             val vx = Random.nextFloat() * 16f - 8f
             val vy = Random.nextFloat() * 18f - 10f
-            particles.add(Particle(cx, cy, vx, vy, 1f, baseColor, blastType, cellSize * 0.2f, Random.nextFloat() * 360f))
+            particles.add(Particle(cx, cy, vx, vy, 1f, color, blastType, cellSize * 0.2f, Random.nextFloat() * 360f))
         }
     }
 
