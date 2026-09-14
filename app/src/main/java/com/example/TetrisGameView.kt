@@ -32,6 +32,26 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private var showResumePopup = false
     private val resumeBtnRect = RectF(); private val newGameBtnRect = RectF()
 
+    // 10 Light Aesthetic Color Schemes (Outer BG + Inner Board)
+    data class ColorTheme(val bg: Int, val boardBg: Int, val boardBorder: Int, val textPrimary: Int, val textSecondary: Int)
+    private val COLOR_THEMES = listOf(
+        ColorTheme(0xFFE8EEF5.toInt(), 0xFFFAFCFF.toInt(), 0xFFC9D8E6.toInt(), 0xFF1E293B.toInt(), 0xFF64748B.toInt()),
+        ColorTheme(0xFFF7ECE1.toInt(), 0xFFFFFDF9.toInt(), 0xFFE6D2C0.toInt(), 0xFF4A3525.toInt(), 0xFF8C715A.toInt()),
+        ColorTheme(0xFFE9F5ED.toInt(), 0xFFFBFFFC.toInt(), 0xFFCDE4D4.toInt(), 0xFF1B4332.toInt(), 0xFF52796F.toInt()),
+        ColorTheme(0xFFF5EBF7.toInt(), 0xFFFEFAFF.toInt(), 0xFFE2CCE6.toInt(), 0xFF3C1642.toInt(), 0xFF7B5080.toInt()),
+        ColorTheme(0xFFFDF0ED.toInt(), 0xFFFFF9F8.toInt(), 0xFFF2D1CA.toInt(), 0xFF4A1E17.toInt(), 0xFF8C5B53.toInt()),
+        ColorTheme(0xFFE6F3F7.toInt(), 0xFFF7FDFF.toInt(), 0xFFC3DFE8.toInt(), 0xFF0F3443.toInt(), 0xFF4A7282.toInt()),
+        ColorTheme(0xFFF9F7E8.toInt(), 0xFFFFFFFA.toInt(), 0xFFEAE5BE.toInt(), 0xFF3D3A1B.toInt(), 0xFF7D774D.toInt()),
+        ColorTheme(0xFFECEEF8.toInt(), 0xFFFBFCFF.toInt(), 0xFFCCD1EB.toInt(), 0xFF1D2447.toInt(), 0xFF565F87.toInt()),
+        ColorTheme(0xFFF3F1EC.toInt(), 0xFFFAF9F6.toInt(), 0xFFD8D3C5.toInt(), 0xFF363228.toInt(), 0xFF6E685B.toInt()),
+        ColorTheme(0xFFE5F5F3.toInt(), 0xFFF5FFFE.toInt(), 0xFFBFE5E0.toInt(), 0xFF0D3B36.toInt(), 0xFF467570.toInt())
+    )
+    private var activePaletteIndex = 0
+
+    // User Image Bitmaps Cache
+    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
+    private val tetrisBitmaps = mutableMapOf<Int, Bitmap?>()
+
     enum class BlastType { LIGHTNING, MELT, POP, BROKEN, BURN, COKE }
 
     data class Particle(
@@ -47,12 +67,8 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     data class FloatingWord(val text: String, var y: Float, var alpha: Float = 1f, var scale: Float = 0.5f)
     private val floatingWords = mutableListOf<FloatingWord>()
 
-    // Light Theme Palette
-    private val bgColor = 0xFFF0F4F8.toInt()
-    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL }
-    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFCCD7E0.toInt(); style = Paint.Style.STROKE; strokeWidth = 8f }
-    private val blockBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val glassOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val boardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val boardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 8f }
     private val text3DPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD; textAlign = Paint.Align.CENTER }
     private val btnPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.CYAN; style = Paint.Style.FILL; setShadowLayer(30f, 0f, 0f, Color.WHITE) }
@@ -75,7 +91,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         arrayOf(intArrayOf(1, 1, 0), intArrayOf(0, 1, 1))
     )
 
-    class Tetromino(var matrix: Array<IntArray>, val colorId: Int) { var x = 3; var y = 0 }
+    class Tetromino(var matrix: Array<IntArray>, val imageId: Int) { var x = 3; var y = 0 }
     private var currentPiece: Tetromino? = null; private var nextPiece: Tetromino? = null
 
     private val gameLoop = object : Runnable { 
@@ -99,11 +115,33 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     }
 
     init { 
+        loadTetrisBitmaps()
+        activePaletteIndex = Random.nextInt(COLOR_THEMES.size)
         if (prefs.getBoolean("TetrisSaved", false)) showResumePopup = true else restartGame()
         handler.post(renderLoop) 
     }
 
-    private fun vibratePhone(duration: Long = 60L) { 
+    private fun loadTetrisBitmaps() {
+        val res = context.resources
+        val mapping = mapOf(
+            1 to "block_chocolate", // Donut
+            2 to "block_biscuit",   // Cookie
+            3 to "block_brick",     // Heart Brick
+            4 to "block_coke",      // Soda Can
+            5 to "block_wood",      // Wooden Board
+            6 to "block_kerosene",  // Bomb
+            7 to "block_lemon",     // Lemon
+            8 to "block_candy",     // Candy
+            9 to "block_orange",    // Orange
+            10 to "block_mirror"    // Gold Mirror
+        )
+        for ((id, name) in mapping) {
+            val resId = res.getIdentifier(name, "drawable", context.packageName)
+            tetrisBitmaps[id] = if (resId != 0) BitmapFactory.decodeResource(res, resId) else null
+        }
+    }
+
+    private fun vibratePhone(duration: Long = 70L) { 
         try { 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
                 vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE)) 
@@ -114,6 +152,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private fun restartGame() {
         for (r in 0 until ROWS) for (c in 0 until COLS) grid[r][c] = 0
         score = 0; speedMs = 600L; isGameOver = false; isWaitingForAd = false; adCountdown = 10; isNewHighScore = false; hsRewardGiven = false
+        activePaletteIndex = Random.nextInt(COLOR_THEMES.size)
         particles.clear(); glowLines.clear(); floatingWords.clear(); confettis.clear()
         prefs.edit().putBoolean("TetrisSaved", false).putBoolean("TetrisHSReward", false).apply()
         nextPiece = generatePiece(); spawnPiece(); handler.removeCallbacks(gameLoop); handler.postDelayed(gameLoop, speedMs)
@@ -122,13 +161,14 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
     private fun loadGame() {
         try {
             score = prefs.getInt("TetrisScore", 0); hsRewardGiven = prefs.getBoolean("TetrisHSReward", false)
+            activePaletteIndex = prefs.getInt("TetrisPaletteIndex", 0)
             val gridStr = prefs.getString("TetrisGrid", "")
             if (gridStr?.isNotEmpty() == true) { 
                 val rows = gridStr.split(";")
                 for (r in 0 until Math.min(ROWS, rows.size)) { 
                     val cols = rows[r].split(",")
                     for (c in 0 until Math.min(COLS, cols.size)) {
-                        grid[r][c] = cols[c].toInt() 
+                        grid[r][c] = cols[c].toIntOrNull() ?: 0
                     } 
                 } 
             }
@@ -140,12 +180,19 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     private fun saveGame() {
         if (isGameOver || showResumePopup || isWaitingForAd) return
-        prefs.edit().putBoolean("TetrisSaved", true).putInt("TetrisScore", score).putBoolean("TetrisHSReward", hsRewardGiven).putString("TetrisGrid", grid.joinToString(";") { it.joinToString(",") }).apply()
+        prefs.edit()
+            .putBoolean("TetrisSaved", true)
+            .putInt("TetrisScore", score)
+            .putBoolean("TetrisHSReward", hsRewardGiven)
+            .putInt("TetrisPaletteIndex", activePaletteIndex)
+            .putString("TetrisGrid", grid.joinToString(";") { it.joinToString(",") })
+            .apply()
     }
 
     private fun generatePiece(): Tetromino { 
         val matrix = SHAPES.random()
-        return Tetromino(Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }, Random.nextInt(1, 6)) 
+        val randomImageId = Random.nextInt(1, 11)
+        return Tetromino(Array(matrix.size) { r -> IntArray(matrix[r].size) { c -> matrix[r][c] } }, randomImageId) 
     }
 
     private fun spawnPiece() {
@@ -202,24 +249,29 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(bgColor)
+        val palette = COLOR_THEMES[activePaletteIndex]
+        
+        // 1. Light Outer Screen Background
+        canvas.drawColor(palette.bg)
 
         val topY = 90f
-        drawGlossy3DText(canvas, "SCORE", boardX + 20f, topY, 0xFF2B3A4A.toInt(), 0xFFB0C4DE.toInt(), 30f, Paint.Align.LEFT)
-        drawGlossy3DText(canvas, "$score", boardX + 20f, topY + 40f, 0xFF1B263B.toInt(), 0xFF8D99AE.toInt(), 40f, Paint.Align.LEFT)
+        drawGlossy3DText(canvas, "SCORE", boardX + 20f, topY, palette.textPrimary, palette.boardBorder, 30f, Paint.Align.LEFT)
+        drawGlossy3DText(canvas, "$score", boardX + 20f, topY + 40f, palette.textPrimary, palette.textSecondary, 40f, Paint.Align.LEFT)
         
-        drawGlossy3DText(canvas, "BEST", width/2f, topY, 0xFF2B3A4A.toInt(), 0xFFB0C4DE.toInt(), 30f, Paint.Align.CENTER)
-        drawGlossy3DText(canvas, "$highScore", width/2f, topY + 40f, 0xFF1B263B.toInt(), 0xFF8D99AE.toInt(), 40f, Paint.Align.CENTER)
+        drawGlossy3DText(canvas, "BEST", width/2f, topY, palette.textPrimary, palette.boardBorder, 30f, Paint.Align.CENTER)
+        drawGlossy3DText(canvas, "$highScore", width/2f, topY + 40f, palette.textPrimary, palette.textSecondary, 40f, Paint.Align.CENTER)
         
         val nextTitleX = boardX + boardSizeW - 20f
-        drawGlossy3DText(canvas, "NEXT", nextTitleX, topY, 0xFF2B3A4A.toInt(), 0xFFB0C4DE.toInt(), 30f, Paint.Align.RIGHT)
+        drawGlossy3DText(canvas, "NEXT", nextTitleX, topY, palette.textPrimary, palette.boardBorder, 30f, Paint.Align.RIGHT)
+        
+        // Next Preview Block Rendering (Using Bitmaps)
         nextPiece?.let { piece ->
-            val previewSize = cellSize * 0.45f
+            val previewSize = cellSize * 0.5f
             for (r in 0 until piece.matrix.size) for (c in 0 until piece.matrix[0].size) 
                 if (piece.matrix[r][c] != 0) {
                     val px = nextTitleX - (piece.matrix[0].size * previewSize) + c * previewSize
                     val py = topY + 15f + r * previewSize
-                    drawGlassy3DBlock(canvas, px, py, previewSize, piece.colorId)
+                    drawItemBitmap(canvas, px, py, previewSize, piece.imageId)
                 }
         }
 
@@ -227,7 +279,10 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         drawCoinIcon(canvas, width/2f - 30f, 50f, 15f)
         drawGlossy3DText(canvas, "$currentCoins", width/2f + 5f, 60f, 0xFFB8860B.toInt(), 0xFF654321.toInt(), 30f, Paint.Align.LEFT)
 
+        // 2. Light Inner Game Board (Even lighter than background)
         val rect = RectF(boardX, boardY, boardX + boardSizeW, boardY + boardSizeH)
+        boardPaint.color = palette.boardBg
+        boardBorderPaint.color = palette.boardBorder
         canvas.drawRoundRect(rect, 20f, 20f, boardPaint)
         canvas.drawRoundRect(rect, 20f, 20f, boardBorderPaint)
 
@@ -238,16 +293,21 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             glow.alpha -= 0.05f; if (glow.alpha <= 0) iteratorGlow.remove()
         }
 
-        val emptyPaint = Paint().apply { color = 0x1E000000; style = Paint.Style.STROKE; strokeWidth = 2f }
+        val emptyPaint = Paint().apply { color = 0x14000000; style = Paint.Style.STROKE; strokeWidth = 2f }
         for (r in 0 until ROWS) for (c in 0 until COLS) {
             val cx = boardX + c * cellSize; val cy = boardY + r * cellSize
             canvas.drawRoundRect(RectF(cx + 2, cy + 2, cx + cellSize - 2, cy + cellSize - 2), 8f, 8f, emptyPaint)
-            if (grid[r][c] != 0) drawGlassy3DBlock(canvas, cx, cy, cellSize, grid[r][c])
+            if (grid[r][c] != 0) drawItemBitmap(canvas, cx + 2, cy + 2, cellSize - 4, grid[r][c])
         }
 
+        // Active Falling Piece Rendering
         currentPiece?.let { piece ->
             for (r in 0 until piece.matrix.size) for (c in 0 until piece.matrix[0].size) 
-                if (piece.matrix[r][c] != 0) drawGlassy3DBlock(canvas, boardX + (piece.x + c) * cellSize, boardY + (piece.y + r) * cellSize, cellSize, piece.colorId)
+                if (piece.matrix[r][c] != 0) {
+                    val cx = boardX + (piece.x + c) * cellSize
+                    val cy = boardY + (piece.y + r) * cellSize
+                    drawItemBitmap(canvas, cx + 2, cy + 2, cellSize - 4, piece.imageId)
+                }
         }
 
         draw3DControlButton(canvas, btnLeft, "◀", 0xFF9D4EDD.toInt(), 0xFF4A00E0.toInt())
@@ -339,27 +399,16 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         }
     }
 
-    private fun drawGlassy3DBlock(canvas: Canvas, x: Float, y: Float, size: Float, colorId: Int) {
-        val rect = RectF(x + 2, y + 2, x + size - 2, y + size - 2)
-        val baseColor = getBaseColor(colorId)
-        val grad = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, 
-            intArrayOf(adjustColorLightness(baseColor, 1.3f), baseColor, adjustColorLightness(baseColor, 0.7f)), 
-            null, Shader.TileMode.CLAMP)
-        blockBasePaint.shader = grad; canvas.drawRoundRect(rect, 10f, 10f, blockBasePaint); blockBasePaint.shader = null 
-        
-        val overlayRect = RectF(rect.left + 2, rect.top + 2, rect.right - 2, rect.top + size * 0.4f)
-        val shineGrad = LinearGradient(overlayRect.left, overlayRect.top, overlayRect.left, overlayRect.bottom, 0x99FFFFFF.toInt(), 0x00FFFFFF, Shader.TileMode.CLAMP)
-        glassOverlayPaint.shader = shineGrad; canvas.drawRoundRect(overlayRect, 8f, 8f, glassOverlayPaint)
-    }
-
-    private fun adjustColorLightness(color: Int, factor: Float): Int { 
-        val hsv = FloatArray(3); Color.colorToHSV(color, hsv); hsv[2] = (hsv[2] * factor).coerceIn(0f, 1f)
-        return Color.HSVToColor(hsv) 
-    }
-    
-    private fun getBaseColor(id: Int): Int = when (id) { 
-        1 -> 0xFFE74C3C.toInt(); 2 -> 0xFF3498DB.toInt(); 3 -> 0xFF2ECC71.toInt()
-        4 -> 0xFFF1C40F.toInt(); 5 -> 0xFF9B59B6.toInt(); else -> 0xFF34495E.toInt() 
+    // Direct Transparent PNG Rendering for Tetris Blocks
+    private fun drawItemBitmap(canvas: Canvas, x: Float, y: Float, size: Float, type: Int) {
+        val rect = RectF(x, y, x + size, y + size)
+        val bmp = tetrisBitmaps[type] ?: tetrisBitmaps[1]
+        if (bmp != null) {
+            canvas.drawBitmap(bmp, null, rect, bitmapPaint)
+        } else {
+            val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF4A90E2.toInt(); style = Paint.Style.FILL }
+            canvas.drawRoundRect(rect, 8f, 8f, fallbackPaint)
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -388,7 +437,8 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         if (isGameOver) {
             if (restartBtnRect.contains(tx, ty)) { soundManager.playBtnClick(); restartGame(); return true }
             if (menuBtnRect.contains(tx, ty)) { 
-                soundManager.playBtnClick(); prefs.edit().putBoolean("TetrisSaved", false).apply()
+                soundManager.playBtnClick()
+                prefs.edit().putBoolean("TetrisSaved", false).apply()
                 (context as Activity).finish(); return true 
             }
         }
@@ -424,7 +474,7 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
         currentPiece?.let { piece ->
             soundManager.playDrop()
             for (r in 0 until piece.matrix.size) for (c in 0 until piece.matrix[0].size) 
-                if (piece.matrix[r][c] != 0 && piece.y + r in 0 until ROWS && piece.x + c in 0 until COLS) grid[piece.y + r][piece.x + c] = piece.colorId
+                if (piece.matrix[r][c] != 0 && piece.y + r in 0 until ROWS && piece.x + c in 0 until COLS) grid[piece.y + r][piece.x + c] = piece.imageId
             checkLines(); spawnPiece()
         }
     }
@@ -442,8 +492,9 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             } else r--
         }
         if (linesCleared > 0) {
-            soundManager.playClear()
-            vibratePhone(150L) // Tetris line clear vibration
+            val randomBlast = BlastType.values().random()
+            soundManager.playBlastSound(randomBlast.name)
+            vibratePhone(120L) // Line clear vibration
             
             handler.postDelayed({ 
                 val word = soundManager.playComboVoice(linesCleared)
@@ -454,11 +505,10 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
             
             for (cr in clearedRows) {
                 glowLines.add(GlowLine(true, cr))
-                val randomType = BlastType.values().random()
                 val blastY = boardY + cr * cellSize + cellSize/2f
                 for (c in 0 until COLS) {
                     val blastX = boardX + c * cellSize + cellSize/2f
-                    for(i in 0..7) particles.add(Particle(blastX, blastY, Random.nextFloat()*16f-8f, Random.nextFloat()*18f-10f, 1f, getBaseColor(Random.nextInt(1,6)), randomType, cellSize * 0.2f, Random.nextFloat() * 360f))
+                    spawnBlastParticles(blastX, blastY, randomBlast)
                 }
             }
             if (score > highScore) { 
@@ -469,6 +519,23 @@ class TetrisGameView @JvmOverloads constructor(context: Context, attrs: Attribut
                     floatingWords.add(FloatingWord("FREE SHUFFLE!", boardY + boardSizeH/2f + 80f)) 
                 }
             }
+        }
+    }
+
+    private fun spawnBlastParticles(cx: Float, cy: Float, blastType: BlastType) {
+        val color = when (blastType) {
+            BlastType.BURN -> 0xFFFF4500.toInt()
+            BlastType.BROKEN -> 0xFF8B4513.toInt()
+            BlastType.MELT -> 0xFF4A2C11.toInt()
+            BlastType.COKE -> 0xFFE71D36.toInt()
+            BlastType.LIGHTNING -> 0xFF00E5FF.toInt()
+            BlastType.POP -> 0xFFFFD700.toInt()
+        }
+        val count = if (blastType == BlastType.COKE || blastType == BlastType.LIGHTNING) 14 else 8
+        for (i in 0 until count) {
+            val vx = Random.nextFloat() * 16f - 8f
+            val vy = Random.nextFloat() * 18f - 10f
+            particles.add(Particle(cx, cy, vx, vy, 1f, color, blastType, cellSize * 0.2f, Random.nextFloat() * 360f))
         }
     }
 
