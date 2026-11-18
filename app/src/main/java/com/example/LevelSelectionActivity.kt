@@ -20,39 +20,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.*
 
 class LevelSelectionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            BoxBlastTheme {
-                LevelSelectionScreen(
-                    onBackClick = { finish() },
-                    onLevelClick = { level ->
-                        val intent = Intent(this, AdventureGameActivity::class.java)
-                        intent.putExtra("EXTRA_LEVEL", level)
-                        startActivity(intent)
-                    }
-                )
-            }
+            LevelSelectionScreen(
+                onBackClick = { finish() },
+                onLevelClick = { level ->
+                    val intent = Intent(this, AdventureGameActivity::class.java)
+                    intent.putExtra("EXTRA_LEVEL", level)
+                    startActivity(intent)
+                }
+            )
         }
     }
 }
 
 @Composable
 fun LevelSelectionScreen(onBackClick: () -> Unit, onLevelClick: (Int) -> Unit) {
-    // Let's assume player has unlocked up to Level 8
+    // Current unlocked level progress (e.g., player is at level 8)
     val unlockedLevelMax = 8
+    val completedLevelsWithStars = mapOf(1 to 3, 2 to 3, 3 to 2, 4 to 3, 5 to 1, 6 to 3, 7 to 2) // Example completed level stars
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(DeepMidnightBg, DarkIndigoCard)
-                )
-            )
+            .background(Color(0xFFFDF6F0)) // Clean light cream background matching user theme
             .padding(16.dp)
     ) {
         Column(
@@ -68,46 +62,22 @@ fun LevelSelectionScreen(onBackClick: () -> Unit, onLevelClick: (Int) -> Unit) {
             ) {
                 Button(
                     onClick = onBackClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = GlassWhite)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE2E8F0))
                 ) {
-                    Text(text = "← Back", color = Color.White)
+                    Text(text = "← Back", color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
                 }
 
                 Text(
                     text = "ADVENTURE MAP",
-                    color = Color.White,
+                    color = Color(0xFF1E293B),
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Black
                 )
 
-                Spacer(modifier = Modifier.width(60.dp)) // balance layout
+                Spacer(modifier = Modifier.width(60.dp))
             }
 
-            // Stars Progress Header
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = GlassWhite
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "⭐", fontSize = 20.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Stars: 45 / 300",
-                        color = NeonGold,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Level Grid (3 Columns)
             LazyVerticalGrid(
@@ -119,12 +89,12 @@ fun LevelSelectionScreen(onBackClick: () -> Unit, onLevelClick: (Int) -> Unit) {
                 items(30) { index ->
                     val levelNum = index + 1
                     val isUnlocked = levelNum <= unlockedLevelMax
-                    val isCurrent = levelNum == unlockedLevelMax
+                    val earnedStars = completedLevelsWithStars[levelNum] ?: 0
 
                     LevelCard(
                         levelNumber = levelNum,
                         isUnlocked = isUnlocked,
-                        isCurrent = isCurrent,
+                        earnedStars = earnedStars,
                         onClick = {
                             if (isUnlocked) {
                                 onLevelClick(levelNum)
@@ -138,17 +108,17 @@ fun LevelSelectionScreen(onBackClick: () -> Unit, onLevelClick: (Int) -> Unit) {
 }
 
 @Composable
-fun LevelCard(levelNumber: Int, isUnlocked: Boolean, isCurrent: Boolean, onClick: () -> Unit) {
+fun LevelCard(levelNumber: Int, isUnlocked: Boolean, earnedStars: Int, onClick: () -> Unit) {
     val bgBrush = when {
-        isCurrent -> Brush.verticalGradient(listOf(NeonGold, Color(0xFFD97706))) // Active Golden Glossy
-        isUnlocked -> Brush.verticalGradient(listOf(NeonCyan, Color(0xFF2563EB))) // Completed Blue Glossy
-        else -> Brush.verticalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B))) // Locked dark style
+        isUnlocked && earnedStars > 0 -> Brush.verticalGradient(listOf(Color(0xFFFBBF24), Color(0xFFD97706))) // Completed (Glossy Gold)
+        isUnlocked -> Brush.verticalGradient(listOf(Color(0xFF38BDF8), Color(0xFF0284C7))) // Unlocked current (Glossy Blue)
+        else -> Brush.verticalGradient(listOf(Color(0xFF94A3B8), Color(0xFF64748B))) // Locked dark gray
     }
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(bgBrush)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
@@ -161,24 +131,26 @@ fun LevelCard(levelNumber: Int, isUnlocked: Boolean, isCurrent: Boolean, onClick
                 Text(
                     text = "$levelNumber",
                     color = Color.White,
-                    fontSize = 22.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "⭐⭐⭐",
-                    fontSize = 12.sp
-                )
+                if (earnedStars > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "⭐".repeat(earnedStars),
+                        fontSize = 12.sp
+                    )
+                }
             } else {
-                // Locked level representation (Chain Lock style)
+                // Chain Lock / Locked representation
                 Text(
                     text = "🔒",
-                    fontSize = 28.sp
+                    fontSize = 26.sp
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "LOCKED",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = Color.White.copy(alpha = 0.8f),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
